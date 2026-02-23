@@ -1,0 +1,236 @@
+#include <stddef.h>
+#include <stdlib.h>
+#include "stdio.h"
+#include "types.h"
+
+#define SHADER_PATH "../../src/shaders/"
+// #define SHADER_PATH "..\\..\\src\\shaders\\"
+
+// clang-format off
+float quad_verts[16] = {
+	-1.0f, -1.0f, 0.0f, 0.0f,
+	-1.0f,  1.0f, 0.0f, 1.0f,
+	 1.0f, -1.0f, 1.0f, 0.0f,
+	 1.0f,  1.0f, 1.0f, 1.0f
+};
+
+unsigned int quad_indices[4] = {
+	0, 1, 2, 3
+};
+// clang-format on
+
+void create_fullscreen_vao(struct renderer *ren)
+{
+	GLuint vao;
+	GLuint vbo;
+	GLuint ebo;
+
+	glCreateVertexArrays(1, &vao);
+	glCreateBuffers(1, &vbo);
+	glCreateBuffers(1, &ebo);
+
+	glNamedBufferStorage(vbo, sizeof(quad_verts), quad_verts, 0);
+	glNamedBufferStorage(ebo, sizeof(quad_indices), quad_indices, 0);
+
+	glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(float) * 4);
+	glVertexArrayElementBuffer(vao, ebo);
+
+	glEnableVertexArrayAttrib(vao, 0);
+	glEnableVertexArrayAttrib(vao, 1);
+
+	glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, 0);
+	glVertexArrayAttribFormat(vao, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float));
+
+	glVertexArrayAttribBinding(vao, 0, 0);
+	glVertexArrayAttribBinding(vao, 1, 0);
+
+	ren->quad_mesh.vao = vao;
+}
+
+void create_texture(struct texture *tex)
+{
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex->id);
+	glTextureParameteri(tex->id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTextureParameteri(tex->id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTextureParameteri(tex->id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTextureParameteri(tex->id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTextureStorage2D(tex->id, 1, tex->internal_format, tex->width, tex->height);
+}
+
+void create_framebuffer(struct framebuffer *fbo)
+{
+	GLuint rb;
+	GLenum attachments[1] = { GL_COLOR_ATTACHMENT0 };
+
+	glCreateFramebuffers(1, &fbo->id);
+	glCreateRenderbuffers(1, &rb);
+	glNamedRenderbufferStorage(rb, GL_DEPTH_COMPONENT16, fbo->width, fbo->height);
+
+	create_texture(&fbo->render_tex);
+	glNamedFramebufferTexture(fbo->id, GL_COLOR_ATTACHMENT0, fbo->render_tex.id, 0);
+
+	glNamedFramebufferDrawBuffers(fbo->id, 1, attachments);
+	glNamedFramebufferRenderbuffer(fbo->id, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb);
+
+	if (glCheckNamedFramebufferStatus(fbo->id, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		printf("Framebuffer not complete.\n");
+	}
+}
+
+const char *read_file(char *file_path)
+{
+	long len;
+	FILE *f = fopen(file_path, "rb");
+	char *buff;
+	fseek(f, 0, SEEK_END);
+	len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	buff = malloc(len + 1);
+	fread(buff, sizeof(char), len, f);
+	buff[len] = '\0';
+	fclose(f);
+	return buff;
+}
+
+void check_shader_compilation(GLuint shader, const char *name)
+{
+	GLint success;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+
+	if (!success) {
+		char buff[1024];
+		glGetShaderInfoLog(shader, 1024, NULL, buff);
+		printf("ERROR::SHADER_COMPILATION::%s::%s\n", name, buff);
+	}
+}
+
+void check_program_link(GLuint prog)
+{
+	GLint success;
+	glGetProgramiv(prog, GL_LINK_STATUS, &success);
+
+	if (!success) {
+		char buff[1024];
+		glGetShaderInfoLog(prog, 1024, NULL, buff);
+		printf("ERROR::PROGRAM_LINK::%s\n", buff);
+	}
+}
+
+GLuint load_shader(const char *vert_file, const char *frag_file)
+{
+	GLuint vert_shader;
+	GLuint frag_shader;
+	GLuint prog;
+
+	char vert_path[512];
+	char frag_path[512];
+
+	snprintf(vert_path, 512, "%s%s", SHADER_PATH, vert_file);
+	snprintf(frag_path, 512, "%s%s", SHADER_PATH, frag_file);
+
+	const char *vert_buff = read_file(vert_path);
+	const char *frag_buff = read_file(frag_path);
+
+	vert_shader = glCreateShader(GL_VERTEX_SHADER);
+	frag_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	prog = glCreateProgram();
+
+	glShaderSource(vert_shader, 1, &vert_buff, NULL);
+	glShaderSource(frag_shader, 1, &frag_buff, NULL);
+	glCompileShader(vert_shader);
+	glCompileShader(frag_shader);
+
+	check_shader_compilation(vert_shader, vert_file);
+	check_shader_compilation(frag_shader, frag_file);
+
+	glAttachShader(prog, vert_shader);
+	glAttachShader(prog, frag_shader);
+
+	glLinkProgram(prog);
+
+	check_program_link(prog);
+
+	free((void *)vert_buff);
+	free((void *)frag_buff);
+	return prog;
+}
+
+void load_all_shaders(struct renderer *ren)
+{
+	ren->sdf_shader = load_shader("fullscreen.vert", "sdf.frag");
+	ren->fullscreen_shader = load_shader("fullscreen.vert", "fullscreen.frag");
+}
+
+void reload_shaders(struct renderer *ren)
+{
+	glDeleteProgram(ren->sdf_shader);
+	glDeleteProgram(ren->fullscreen_shader);
+	load_all_shaders(ren);
+	printf("reloading shaders\n");
+}
+
+void draw(struct renderer *ren, struct window *win, struct scene *scene)
+{
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct entity) * scene->num_entities, scene->entities);
+
+	glViewport(0, 0, ren->fullscreen_fbo.width, ren->fullscreen_fbo.height);
+	glBindFramebuffer(GL_FRAMEBUFFER, ren->fullscreen_fbo.id);
+	glClearNamedFramebufferfv(ren->fullscreen_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
+
+	glUseProgram(ren->sdf_shader);
+	glUniform1fv(5, 1, &ren->time);
+	// float mouse_pos[2];
+
+	// vec2 frag_pos = (2.0 * gl_FragCoord.xy - vec2(800, 600)) / 600;
+	// float x = win->mouse_pos[0] / win->width;
+	// float y = win->mouse_pos[1] / win->height;
+	// float mod_x = x * 800.0f;
+	// float mod_y = y * 600.0f;
+	// mouse_pos[0] = (2.0f * mod_x - 800.0f) / 600.0f;
+	// mouse_pos[1] = (2.0f * mod_y - 600.0f) / 600.0f;
+	// glUniform2fv(6, 1, &mouse_pos[0]);
+	glUniform2fv(8, 1, &scene->camera.transform.pos.x);
+	glUniform1i(9, scene->num_entities);
+	glBindVertexArray(ren->quad_mesh.vao);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
+
+	glViewport(0, 0, win->width, win->height);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glClearNamedFramebufferfv(0, GL_COLOR, 0, &ren->clear_color[0]);
+	glUseProgram(ren->fullscreen_shader);
+	glBindTextureUnit(0, ren->fullscreen_fbo.render_tex.id);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
+}
+
+void create_sdf_buffer(struct renderer *ren, struct scene *scene)
+{
+	glCreateBuffers(1, &ren->sdf_buff);
+	glNamedBufferStorage(ren->sdf_buff, sizeof(struct entity) * scene->max_entities, NULL, GL_DYNAMIC_STORAGE_BIT);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ren->sdf_buff);
+}
+
+void init_renderer(struct renderer *ren, struct window *win, struct scene *scene)
+{
+	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
+	glDisable(GL_DEPTH_TEST);
+
+	ren->clear_color[0] = 1.0;
+	ren->clear_color[1] = 0.0;
+	ren->clear_color[2] = 0.0;
+	ren->clear_color[3] = 1.0;
+	ren->clear_depth = 1.0;
+
+	ren->fullscreen_fbo.width = 1920;
+	ren->fullscreen_fbo.height = 1080;
+	ren->fullscreen_fbo.render_tex.width = ren->fullscreen_fbo.width;
+	ren->fullscreen_fbo.render_tex.height = ren->fullscreen_fbo.height;
+	ren->fullscreen_fbo.render_tex.internal_format = GL_RGBA8;
+
+	create_framebuffer(&ren->fullscreen_fbo);
+	create_fullscreen_vao(ren);
+	create_sdf_buffer(ren, scene);
+	load_all_shaders(ren);
+	glUseProgram(ren->sdf_shader);
+	float res[2] = { ren->fullscreen_fbo.width, ren->fullscreen_fbo.height };
+	glUniform2fv(7, 1, &res[0]);
+}
