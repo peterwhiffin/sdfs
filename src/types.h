@@ -1,36 +1,63 @@
 #pragma once
 #include "SDL3/SDL.h"
+#include "SDL3/SDL_video.h"
 #include "glad/glad.h"
 #include "cglm/types-struct.h"
 #include <stdint.h>
+#include "imgui/dcimgui.h"
 
-enum shape_type {
-	CIRCLE = 1,
-	BOX,
-	TRIANGLE,
+enum shape_type { CIRCLE = 1, BOX, TRIANGLE, NUM_SHAPES };
+
+enum edit_type {
+	NONE = 0,
+	UNION,
+	SUBTRACTION,
+	INTERSECTION,
+	SMOOTH_UNION,
+	SMOOTH_SUBTRACTION,
+	SMOOTH_INTERSECTION,
+	NUM_EDITS
 };
 
 struct transform {
 	vec2s pos;
 };
 
-struct entity {
+struct sdf_shape {
 	struct transform transform;
 	vec4s dim;
 	vec4s color;
-	enum shape_type type;
+	float blend;
+	enum shape_type shape_type;
+	enum edit_type edit_type;
+};
+
+struct camera {
+	struct transform transform;
+	struct transform target;
+	float size;
+};
+
+struct entity {
+	char name[256];
+	uint32_t id;
+	struct sdf_shape *sdf;
 };
 
 struct scene {
+	struct sdf_shape *sdfs;
 	struct entity *entities;
-	struct entity camera;
+	struct sdf_shape camera;
 	float cam_speed;
 	uint32_t max_entities;
+	uint32_t num_sdfs;
 	uint32_t num_entities;
+	uint32_t next_id;
 };
 
 struct window {
 	SDL_Window *sdl_win;
+	SDL_GLContext gl_ctx;
 	const bool *sdl_keys;
 	vec2s movement;
 	float width;
@@ -59,6 +86,7 @@ struct framebuffer {
 	GLuint id;
 	float width;
 	float height;
+	float aspect;
 };
 
 struct renderer {
@@ -71,4 +99,13 @@ struct renderer {
 	GLuint sdf_shader;
 	GLuint fullscreen_shader;
 	GLuint sdf_buff;
+};
+
+struct editor {
+	struct scene *scene;
+	struct renderer *ren;
+	struct window *win;
+	struct entity *selected_entity;
+	struct camera scene_cam;
+	float cam_speed;
 };

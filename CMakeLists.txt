@@ -8,4 +8,4 @@ target_include_directories(dummy PRIVATE
 	"${CMAKE_SOURCE_DIR}/inc"
 )
 
-target_compile_definitions(dummy PRIVATE)
+target_compile_definitions(dummy PRIVATE NK_INCLUDE_DEFAULT_ALLOCATOR NK_IMPLEMENTATION)

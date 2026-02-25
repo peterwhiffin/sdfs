@@ -6,15 +6,36 @@
 // 	TRIANGLE,
 // };
 
+// enum edit_type { NONE = 0, UNION, SUBTRACTION, INTERSECTION, SMOOTH_UNION, SMOOTH_SUBTRACTION, SMOOTH_INTERSECTION } ;
+
 const uint CIRCLE = 1;
 const uint BOX = 2;
 const uint TRIANGLE = 3;
+
+const uint NONE = 0;
+const uint UNION = 1;
+const uint SUBTRACTION = 2;
+const uint INTERSECTION = 3;
+const uint SMOOTH_UNION = 4;
+const uint SMOOTH_SUBTRACTION = 5;
+const uint SMOOTH_INTERSECTION = 6;
+
+// struct entity {
+// 	struct transform transform;
+// 	vec4s dim;
+// 	vec4s color;
+// 	float blend;
+// 	enum shape_type shape_type;
+// 	enum edit_type edit_type;
+// };
 
 struct entity {
         vec2 position;
         vec4 dim;
         vec4 color;
-        uint type;
+        float blend;
+        uint shape_type;
+        uint edit_type;
 };
 
 layout(location = 2) in vec2 tex_coord;
@@ -103,12 +124,12 @@ vec4 map() {
                 vec2 pos = frag_pos - entities[i].position;
                 float d = sdCircle(pos, 1.0);
 
-                switch (entities[i].type) {
+                switch (entities[i].shape_type) {
                         case CIRCLE:
                         d = sdCircle(pos, entities[i].dim.x);
                         break;
                         case BOX:
-                        d = sdBox(pos, entities[i].dim.xy);
+                        d = sdBox(pos, entities[i].dim.yx);
                         break;
                         case TRIANGLE:
                         d = sdEquilateralTriangle(pos, entities[i].dim.x);
@@ -116,7 +137,18 @@ vec4 map() {
                 }
 
                 float temp = m.a;
-                m.a = opSmoothUnion(m.a, d, 0.50);
+
+                switch (entities[i].edit_type) {
+                        case SMOOTH_UNION:
+                        m.a = opSmoothUnion(d, m.a, entities[i].blend);
+                        break;
+                        case SMOOTH_SUBTRACTION:
+                        m.a = opSmoothSubtraction(m.a, d, entities[i].blend);
+                        break;
+                        case SMOOTH_INTERSECTION:
+                        m.a = opSmoothIntersection(m.a, d, entities[i].blend);
+                        break;
+                }
 
                 if (m.a < temp) {
                         m.rgb = entities[i].color.rgb;
@@ -127,10 +159,11 @@ vec4 map() {
 
         return m;
 }
-void main() {
+void main()
+{
         vec4 m = map();
 
-        float epsilon = 0.06;
+        float epsilon = 0.09;
         vec3 col = vec3(0.4, 0.1, 0.4);
 
         if (m.a < -epsilon) {
@@ -139,6 +172,16 @@ void main() {
         } else if (m.a < epsilon) {
                 col = vec3(1.0, 1.0, 1.0);
         }
+
+        vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
+        frag_pos *= 10.0;
+        frag_pos += cam_pos;
+
+        float light_d = distance(frag_pos, cam_pos);
+
+        float mag = length(col);
+        // col *= 0.05 / 1.0 - sdCircle(vec2(2.0, 1.0) - frag_pos, 2.5);
+        col *= 1.45 / distance(frag_pos, vec2(0.0, 4.0));
 
         frag_color = vec4(col, 1.0);
 }
