@@ -130,7 +130,7 @@ vec4 map() {
 
         vec4 m;
         m.a = 1.0;
-        m.rgb = vec3(0.4, 0.8, 0.4);
+        m.rgb = vec3(0.0, 0.0, 0.0);
 
         for (int i = 0; i < num_entities; i++) {
                 vec2 pos = frag_pos - entities[i].position;
@@ -185,14 +185,18 @@ void main()
         vec4 m = map();
 
         float epsilon = 0.00;
-        vec4 col = vec4(0.4, 0.1, 0.4, 0.0);
+        vec4 col = vec4(0.0, 0.0, 0.0, 0.0);
 
-        if (m.a < -epsilon) {
+        if (m.a < epsilon) {
                 // col = vec3(0.0, 0.8, 0.1);
                 col = vec4(m.rgb, 1.0);
-        } else if (m.a < epsilon) {
-                col = vec4(1.0, 1.0, 1.0, 1.0);
+        } else {
+                col.r = (m.a / 10.0) * resolution.x;
         }
+
+        // else if (m.a < epsilon) {
+        //         col = vec4(1.0, 1.0, 1.0, 1.0);
+        // }
 
         // vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
         // frag_pos *= 10.0;

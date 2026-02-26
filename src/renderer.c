@@ -168,6 +168,7 @@ void reload_shaders(struct renderer *ren)
 {
 	glDeleteProgram(ren->sdf_shader);
 	glDeleteProgram(ren->fullscreen_shader);
+	glDeleteProgram(ren->lighting_shader);
 	load_all_shaders(ren);
 
 	// glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ren->sdf_buff);
@@ -199,6 +200,8 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glUniform3fv(10, 1, &ren->tone.r);
 	glUniform1ui(11, ren->ray_count);
 	glUniform1ui(12, ren->max_steps);
+	glUniform1ui(14, ren->use_noise);
+	glUniform1ui(15, ren->use_eps);
 	glBindTextureUnit(0, ren->scene_fbo.render_tex.id);
 	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
@@ -221,7 +224,7 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
 
-	vec2s res = { 800.0f, 600.0f };
+	vec2s res = { 800.0f, 800.0f };
 
 	ren->clear_color[0] = 0.0;
 	ren->clear_color[1] = 0.0;
@@ -237,14 +240,14 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	ren->scene_fbo.aspect = ren->scene_fbo.width / ren->scene_fbo.height;
 	ren->scene_fbo.render_tex.width = ren->scene_fbo.width;
 	ren->scene_fbo.render_tex.height = ren->scene_fbo.height;
-	ren->scene_fbo.render_tex.internal_format = GL_RGBA8;
+	ren->scene_fbo.render_tex.internal_format = GL_RGBA32F;
 
 	ren->lighting_fbo.width = res.x;
 	ren->lighting_fbo.height = res.y;
 	ren->lighting_fbo.aspect = ren->lighting_fbo.width / ren->lighting_fbo.height;
 	ren->lighting_fbo.render_tex.width = ren->lighting_fbo.width;
 	ren->lighting_fbo.render_tex.height = ren->lighting_fbo.height;
-	ren->lighting_fbo.render_tex.internal_format = GL_RGBA8;
+	ren->lighting_fbo.render_tex.internal_format = GL_RGBA32F;
 
 	create_framebuffer(&ren->scene_fbo);
 	create_framebuffer(&ren->lighting_fbo);

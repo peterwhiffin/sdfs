@@ -175,20 +175,16 @@ void draw_debug(struct editor *editor)
 	ImGui_Text("FPS: %f", 1.0f / editor->ren->delta_time);
 	ImGui_DragFloat3Ex("Tone", &editor->ren->tone.r, 0.01f, 0.0f, 1.0f, NULL, 0);
 	ImGui_DragIntEx("Ray count", &editor->ren->ray_count, 1.0, 0, 128, NULL, 0);
-	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, 1920, NULL, 0);
+	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex.width, NULL, 0);
+	ImGui_Checkbox("Use noise", &editor->ren->use_noise);
+	ImGui_Checkbox("Use eps", &editor->ren->use_eps);
+
 	if (ImGui_Button("Add Entity")) {
 		struct entity *e = entity_get_new(editor->scene);
 		entity_add_sdf(editor->scene, e);
 	}
 
 	ImGui_End();
-}
-
-void update(struct renderer *ren, struct window *win, struct scene *scene)
-{
-	// scene->sdfs[0].transform.pos.x += win->movement.x * scene->cam_speed * ren->delta_time;
-	// scene->sdfs[0].transform.pos.y += win->movement.y * scene->cam_speed * ren->delta_time;
-	// printf("%f, %f\n", scene->camera.transform.pos.x, scene->camera.transform.pos.y);
 }
 
 void editor_draw_begin()
@@ -252,6 +248,30 @@ void editor_update(struct editor *editor)
 	editor_draw(editor);
 }
 
+void scene_init(struct scene *scene)
+{
+	for (int i = 0; i < 4; i++) {
+		entity_add_sdf(scene, entity_get_new(scene));
+	}
+
+	scene->sdfs[0].transform.pos = (vec2s){ -0.59f, 5.7f };
+	scene->sdfs[0].dim = (vec4s){ 2.0f, 2.0f, 2.0f, 2.0f };
+	scene->sdfs[0].color = (vec4s){ 1.0f, 1.0f, 1.0f, 1.0f };
+
+	scene->sdfs[1].transform.pos = (vec2s){ 6.27f, 6.5f };
+	scene->sdfs[1].dim = (vec4s){ 1.1f, 2.0f, 2.0f, 2.0f };
+	scene->sdfs[1].color = (vec4s){ 12.0f / 255, 0.0f, 204.0f / 255, 1.0f };
+
+	scene->sdfs[2].transform.pos = (vec2s){ -7.1f, 9.6f };
+	scene->sdfs[2].dim = (vec4s){ 2.0f, 2.0f, 2.0f, 2.0f };
+	scene->sdfs[2].color = (vec4s){ 192.0f / 255, 0.0f, 204.0f / 255, 1.0f };
+
+	scene->sdfs[3].transform.pos = (vec2s){ 4.5f, -0.7f };
+	scene->sdfs[3].shape_type = BOX;
+	scene->sdfs[3].dim = (vec4s){ 0.23f, 6.1f, 2.0f, 2.0f };
+	scene->sdfs[3].color = (vec4s){ 0.0f, 0.0f, 0.0f, 1.0f };
+}
+
 void editor_init(struct renderer *ren, struct scene *scene, struct window *win, struct editor *editor)
 {
 	editor->scene = scene;
@@ -260,8 +280,9 @@ void editor_init(struct renderer *ren, struct scene *scene, struct window *win, 
 	editor->selected_entity = NULL;
 	editor->cam_speed = 10.0f;
 	editor->scene_cam.size = 10.0f;
-	editor->scene_cam.target.pos = (vec2s){ 0.0f, 0.0f };
-	editor->scene_cam.transform.pos = (vec2s){ 0.0f, 0.0f };
+	editor->scene_cam.target.pos = (vec2s){ 0.0f, 3.0f };
+	editor->scene_cam.transform.pos = (vec2s){ 0.0f, 3.0f };
+	scene_init(scene);
 	ImGuiContext *ctx = ImGui_CreateContext(NULL);
 	ImGui_SetCurrentContext(ctx);
 	ImGuiIO *io = ImGui_GetIO();

@@ -123,8 +123,6 @@ int main()
 		poll_events(&win);
 		time_update(&ren, &win);
 		input_update(&win);
-		update(&ren, &win, &scene);
-		// update_camera(&scene, &ren);
 		draw(&ren, &win, &scene, &editor.scene_cam);
 		editor_update(&editor);
 		SDL_GL_SwapWindow(win.sdl_win);

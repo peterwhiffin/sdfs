@@ -98,6 +98,8 @@ struct renderer {
 	float clear_depth;
 	float time;
 	float delta_time;
+	bool use_noise;
+	bool use_eps;
 	GLuint ray_count;
 	GLuint max_steps;
 	GLuint sdf_shader;
