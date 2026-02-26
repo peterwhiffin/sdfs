@@ -43,10 +43,11 @@ void draw_scene(struct editor *editor)
 {
 	ImGui_Begin("Scene", NULL, 0);
 
-	struct framebuffer *scene_fbo = &editor->ren->fullscreen_fbo;
-	ImTextureRef tex_ref = { NULL, scene_fbo->render_tex.id };
+	struct framebuffer *scene_fbo = &editor->ren->scene_fbo;
+	struct framebuffer *lighting_fbo = &editor->ren->lighting_fbo;
+	ImTextureRef tex_ref = { NULL, lighting_fbo->render_tex.id };
 	ImVec2 available_size = ImGui_GetContentRegionAvail();
-	float aspect = editor->ren->fullscreen_fbo.aspect;
+	float aspect = editor->ren->scene_fbo.aspect;
 	float height = min(scene_fbo->render_tex.height, available_size.y);
 	float width = height * aspect;
 
@@ -92,7 +93,9 @@ void draw_inspector(struct editor *editor)
 	if (editor->selected_entity) {
 		struct sdf_shape *sdf = editor->selected_entity->sdf;
 		ImGui_DragFloat2Ex("pos", &sdf->transform.pos.x, 0.01f, 0.0f, 0.0f, NULL, 0);
+		ImGui_DragFloat4Ex("dim", &sdf->dim.x, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_DragFloatEx("blend", &sdf->blend, 0.01f, 0.0f, 0.0f, NULL, 0);
+		ImGui_ColorEdit4("Color", &sdf->color.r, 0);
 		char shape_label[128];
 		switch (sdf->shape_type) {
 		case BOX:
@@ -124,6 +127,15 @@ void draw_inspector(struct editor *editor)
 
 		char edit_label[128];
 		switch (sdf->edit_type) {
+		case UNION:
+			snprintf(edit_label, 128, "%s", "Union");
+			break;
+		case SUBTRACTION:
+			snprintf(edit_label, 128, "%s", "Subtraction");
+			break;
+		case INTERSECTION:
+			snprintf(edit_label, 128, "%s", "Intersection");
+			break;
 		case SMOOTH_UNION:
 			snprintf(edit_label, 128, "%s", "Smooth Union");
 			break;
@@ -136,17 +148,18 @@ void draw_inspector(struct editor *editor)
 		}
 
 		if (ImGui_BeginCombo("Edit", edit_label, 0)) {
-			if (ImGui_Selectable("Smooth Union")) {
+			if (ImGui_Selectable("Union"))
+				sdf->edit_type = UNION;
+			if (ImGui_Selectable("Subtraction"))
+				sdf->edit_type = SUBTRACTION;
+			if (ImGui_Selectable("Intersection"))
+				sdf->edit_type = INTERSECTION;
+			if (ImGui_Selectable("Smooth Union"))
 				sdf->edit_type = SMOOTH_UNION;
-			}
-
-			if (ImGui_Selectable("Smooth Subtraction")) {
+			if (ImGui_Selectable("Smooth Subtraction"))
 				sdf->edit_type = SMOOTH_SUBTRACTION;
-			}
-
-			if (ImGui_Selectable("Smooth Intersection")) {
+			if (ImGui_Selectable("Smooth Intersection"))
 				sdf->edit_type = SMOOTH_INTERSECTION;
-			}
 
 			ImGui_EndCombo();
 		}
@@ -158,7 +171,11 @@ void draw_debug(struct editor *editor)
 {
 	ImGui_Begin("Debug", NULL, 0);
 
-	ImGui_Text("frame time: %f", editor->ren->delta_time);
+	ImGui_Text("Frame time: %fms", editor->ren->delta_time * 1000.0f);
+	ImGui_Text("FPS: %f", 1.0f / editor->ren->delta_time);
+	ImGui_DragFloat3Ex("Tone", &editor->ren->tone.r, 0.01f, 0.0f, 1.0f, NULL, 0);
+	ImGui_DragIntEx("Ray count", &editor->ren->ray_count, 1.0, 0, 128, NULL, 0);
+	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, 1920, NULL, 0);
 	if (ImGui_Button("Add Entity")) {
 		struct entity *e = entity_get_new(editor->scene);
 		entity_add_sdf(editor->scene, e);

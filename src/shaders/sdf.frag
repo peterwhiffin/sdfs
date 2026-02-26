@@ -80,6 +80,18 @@ float sdCircle(vec2 p, float r)
         return length(p) - r;
 }
 
+float opUnion(float a, float b) {
+        return min(a, b);
+}
+
+float opSubtraction(float a, float b) {
+        return -opUnion(a, -b);
+}
+
+float opIntersection(float a, float b) {
+        return -opUnion(-a, -b);
+}
+
 float opSmoothUnion(float a, float b, float k)
 {
         k *= 4.0;
@@ -118,11 +130,11 @@ vec4 map() {
 
         vec4 m;
         m.a = 1.0;
-        m.rgb = vec3(0.4, 0.1, 0.4);
+        m.rgb = vec3(0.4, 0.8, 0.4);
 
         for (int i = 0; i < num_entities; i++) {
                 vec2 pos = frag_pos - entities[i].position;
-                float d = sdCircle(pos, 1.0);
+                float d = 1.0;
 
                 switch (entities[i].shape_type) {
                         case CIRCLE:
@@ -139,21 +151,30 @@ vec4 map() {
                 float temp = m.a;
 
                 switch (entities[i].edit_type) {
+                        case UNION:
+                        m.a = opUnion(d, m.a);
+                        break;
+                        case SUBTRACTION:
+                        m.a = opSubtraction(d, m.a);
+                        break;
+                        case INTERSECTION:
+                        m.a = opIntersection(d, m.a);
+                        break;
                         case SMOOTH_UNION:
                         m.a = opSmoothUnion(d, m.a, entities[i].blend);
                         break;
                         case SMOOTH_SUBTRACTION:
-                        m.a = opSmoothSubtraction(m.a, d, entities[i].blend);
+                        m.a = opSmoothSubtraction(d, m.a, entities[i].blend);
                         break;
                         case SMOOTH_INTERSECTION:
-                        m.a = opSmoothIntersection(m.a, d, entities[i].blend);
+                        m.a = opSmoothIntersection(d, m.a, entities[i].blend);
                         break;
                 }
 
-                if (m.a < temp) {
-                        m.rgb = entities[i].color.rgb;
-                }
-                // m.rgb = mix(m.rgb, entities[i].color.rgb, temp - m.a);
+                // if (m.a < temp) {
+                //         m.rgb = entities[i].color.rgb;
+                // }
+                m.rgb = mix(m.rgb, entities[i].color.rgb, temp - m.a);
                 // m.rgb = smoothstep(m.rgb, entities[i].color.rgb, temp - m.a);
         }
 
@@ -163,25 +184,25 @@ void main()
 {
         vec4 m = map();
 
-        float epsilon = 0.09;
-        vec3 col = vec3(0.4, 0.1, 0.4);
+        float epsilon = 0.00;
+        vec4 col = vec4(0.4, 0.1, 0.4, 0.0);
 
         if (m.a < -epsilon) {
                 // col = vec3(0.0, 0.8, 0.1);
-                col = m.rgb;
+                col = vec4(m.rgb, 1.0);
         } else if (m.a < epsilon) {
-                col = vec3(1.0, 1.0, 1.0);
+                col = vec4(1.0, 1.0, 1.0, 1.0);
         }
 
-        vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
-        frag_pos *= 10.0;
-        frag_pos += cam_pos;
+        // vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
+        // frag_pos *= 10.0;
+        // frag_pos += cam_pos;
 
-        float light_d = distance(frag_pos, cam_pos);
+        // float light_d = distance(frag_pos, cam_pos);
 
-        float mag = length(col);
+        // float mag = length(col);
         // col *= 0.05 / 1.0 - sdCircle(vec2(2.0, 1.0) - frag_pos, 2.5);
-        col *= 1.45 / distance(frag_pos, vec2(0.0, 4.0));
+        // col.rgb *= 1.45 / distance(frag_pos, vec2(0.0, 4.0));
 
-        frag_color = vec4(col, 1.0);
+        frag_color = col;
 }

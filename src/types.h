@@ -90,13 +90,18 @@ struct framebuffer {
 };
 
 struct renderer {
-	struct framebuffer fullscreen_fbo;
+	struct framebuffer scene_fbo;
+	struct framebuffer lighting_fbo;
 	struct mesh quad_mesh;
+	vec3s tone;
 	float clear_color[4];
 	float clear_depth;
 	float time;
 	float delta_time;
+	GLuint ray_count;
+	GLuint max_steps;
 	GLuint sdf_shader;
+	GLuint lighting_shader;
 	GLuint fullscreen_shader;
 	GLuint sdf_buff;
 };

@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdlib.h>
+#include "cglm/types-struct.h"
 #include "stdio.h"
 #include "types.h"
 #include "renderer.h"
@@ -159,6 +160,7 @@ GLuint load_shader(const char *vert_file, const char *frag_file)
 void load_all_shaders(struct renderer *ren)
 {
 	ren->sdf_shader = load_shader("fullscreen.vert", "sdf.frag");
+	ren->lighting_shader = load_shader("fullscreen.vert", "lighting.frag");
 	ren->fullscreen_shader = load_shader("fullscreen.vert", "fullscreen.frag");
 }
 
@@ -171,7 +173,7 @@ void reload_shaders(struct renderer *ren)
 	// glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ren->sdf_buff);
 
 	glUseProgram(ren->sdf_shader);
-	float res[2] = { ren->fullscreen_fbo.width, ren->fullscreen_fbo.height };
+	float res[2] = { ren->scene_fbo.width, ren->scene_fbo.height };
 	glUniform2fv(7, 1, &res[0]);
 	printf("reloading shaders\n");
 }
@@ -180,34 +182,30 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 {
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct sdf_shape) * scene->num_sdfs, scene->sdfs);
 
-	glViewport(0, 0, ren->fullscreen_fbo.width, ren->fullscreen_fbo.height);
-	glBindFramebuffer(GL_FRAMEBUFFER, ren->fullscreen_fbo.id);
-	glClearNamedFramebufferfv(ren->fullscreen_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
+	glViewport(0, 0, ren->scene_fbo.width, ren->scene_fbo.height);
+	glBindFramebuffer(GL_FRAMEBUFFER, ren->scene_fbo.id);
+	glClearNamedFramebufferfv(ren->scene_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
 
 	glUseProgram(ren->sdf_shader);
 	glUniform1fv(5, 1, &ren->time);
-	// float mouse_pos[2];
-
-	// vec2 frag_pos = (2.0 * gl_FragCoord.xy - vec2(800, 600)) / 600;
-	// float x = win->mouse_pos[0] / win->width;
-	// float y = win->mouse_pos[1] / win->height;
-	// float mod_x = x * 800.0f;
-	// float mod_y = y * 600.0f;
-	// mouse_pos[0] = (2.0f * mod_x - 800.0f) / 600.0f;
-	// mouse_pos[1] = (2.0f * mod_y - 600.0f) / 600.0f;
-	// glUniform2fv(6, 1, &mouse_pos[0]);
-	// printf("%f, %f\n", cam->transform.pos.x, cam->transform.pos.y);
 	glUniform2fv(8, 1, &cam->transform.pos.x);
 	glUniform1i(9, scene->num_sdfs);
+	glBindVertexArray(ren->quad_mesh.vao);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, ren->lighting_fbo.id);
+	glClearNamedFramebufferfv(ren->lighting_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
+	glUseProgram(ren->lighting_shader);
+	glUniform3fv(10, 1, &ren->tone.r);
+	glUniform1ui(11, ren->ray_count);
+	glUniform1ui(12, ren->max_steps);
+	glBindTextureUnit(0, ren->scene_fbo.render_tex.id);
 	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 
 	glViewport(0, 0, win->width, win->height);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClearNamedFramebufferfv(0, GL_COLOR, 0, &ren->clear_color[0]);
-	// glUseProgram(ren->fullscreen_shader);
-	// glBindTextureUnit(0, ren->fullscreen_fbo.render_tex.id);
-	// glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 }
 
 void create_sdf_buffer(struct renderer *ren, struct scene *scene)
@@ -223,24 +221,38 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
 
+	vec2s res = { 800.0f, 600.0f };
+
 	ren->clear_color[0] = 0.0;
 	ren->clear_color[1] = 0.0;
 	ren->clear_color[2] = 0.0;
-	ren->clear_color[3] = 1.0;
+	ren->clear_color[3] = 0.0;
 	ren->clear_depth = 1.0;
+	ren->ray_count = 8;
+	ren->max_steps = 8;
+	ren->tone = (vec3s){ 1.0f, 1.0f, 1.0f };
 
-	ren->fullscreen_fbo.width = 1920;
-	ren->fullscreen_fbo.height = 1080;
-	ren->fullscreen_fbo.aspect = ren->fullscreen_fbo.width / ren->fullscreen_fbo.height;
-	ren->fullscreen_fbo.render_tex.width = ren->fullscreen_fbo.width;
-	ren->fullscreen_fbo.render_tex.height = ren->fullscreen_fbo.height;
-	ren->fullscreen_fbo.render_tex.internal_format = GL_RGBA8;
+	ren->scene_fbo.width = res.x;
+	ren->scene_fbo.height = res.y;
+	ren->scene_fbo.aspect = ren->scene_fbo.width / ren->scene_fbo.height;
+	ren->scene_fbo.render_tex.width = ren->scene_fbo.width;
+	ren->scene_fbo.render_tex.height = ren->scene_fbo.height;
+	ren->scene_fbo.render_tex.internal_format = GL_RGBA8;
 
-	create_framebuffer(&ren->fullscreen_fbo);
+	ren->lighting_fbo.width = res.x;
+	ren->lighting_fbo.height = res.y;
+	ren->lighting_fbo.aspect = ren->lighting_fbo.width / ren->lighting_fbo.height;
+	ren->lighting_fbo.render_tex.width = ren->lighting_fbo.width;
+	ren->lighting_fbo.render_tex.height = ren->lighting_fbo.height;
+	ren->lighting_fbo.render_tex.internal_format = GL_RGBA8;
+
+	create_framebuffer(&ren->scene_fbo);
+	create_framebuffer(&ren->lighting_fbo);
 	create_fullscreen_vao(ren);
 	create_sdf_buffer(ren, scene);
 	load_all_shaders(ren);
 	glUseProgram(ren->sdf_shader);
-	float res[2] = { ren->fullscreen_fbo.width, ren->fullscreen_fbo.height };
-	glUniform2fv(7, 1, &res[0]);
+	glUniform2fv(7, 1, &res.x);
+	glUseProgram(ren->lighting_shader);
+	glUniform2fv(13, 1, &res.x);
 }
