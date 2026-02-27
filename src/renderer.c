@@ -68,10 +68,32 @@ void create_framebuffer(struct framebuffer *fbo)
 	glCreateRenderbuffers(1, &rb);
 	glNamedRenderbufferStorage(rb, GL_DEPTH_COMPONENT16, fbo->width, fbo->height);
 
-	create_texture(&fbo->render_tex);
-	glNamedFramebufferTexture(fbo->id, GL_COLOR_ATTACHMENT0, fbo->render_tex.id, 0);
+	create_texture(&fbo->render_tex[0]);
+	glNamedFramebufferTexture(fbo->id, GL_COLOR_ATTACHMENT0, fbo->render_tex[0].id, 0);
 
 	glNamedFramebufferDrawBuffers(fbo->id, 1, attachments);
+	glNamedFramebufferRenderbuffer(fbo->id, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb);
+
+	if (glCheckNamedFramebufferStatus(fbo->id, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		printf("Framebuffer not complete.\n");
+	}
+}
+
+void create_scene_framebuffer(struct framebuffer *fbo)
+{
+	GLuint rb;
+	GLenum attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT0 + 1};
+
+	glCreateFramebuffers(1, &fbo->id);
+	glCreateRenderbuffers(1, &rb);
+	glNamedRenderbufferStorage(rb, GL_DEPTH_COMPONENT16, fbo->width, fbo->height);
+
+	create_texture(&fbo->render_tex[0]);
+	create_texture(&fbo->render_tex[1]);
+	glNamedFramebufferTexture(fbo->id, GL_COLOR_ATTACHMENT0, fbo->render_tex[0].id, 0);
+	glNamedFramebufferTexture(fbo->id, GL_COLOR_ATTACHMENT0 + 1, fbo->render_tex[1].id, 0);
+
+	glNamedFramebufferDrawBuffers(fbo->id, 2, attachments);
 	glNamedFramebufferRenderbuffer(fbo->id, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb);
 
 	if (glCheckNamedFramebufferStatus(fbo->id, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -191,18 +213,23 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glUniform1fv(5, 1, &ren->time);
 	glUniform2fv(8, 1, &cam->transform.pos.x);
 	glUniform1i(9, scene->num_sdfs);
+	glUniform1fv(10, 1, &cam->size);
 	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, ren->lighting_fbo.id);
 	glClearNamedFramebufferfv(ren->lighting_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
 	glUseProgram(ren->lighting_shader);
-	glUniform3fv(10, 1, &ren->tone.r);
 	glUniform1ui(11, ren->ray_count);
 	glUniform1ui(12, ren->max_steps);
 	glUniform1ui(14, ren->use_noise);
 	glUniform1ui(15, ren->show_dist);
-	glBindTextureUnit(0, ren->scene_fbo.render_tex.id);
+	glUniform1fv(16,1, &ren->constant);
+	glUniform1fv(17,1, &ren->linear);
+	glUniform1fv(18,1, &ren->quadratic);
+	glUniform1fv(19,1, &ren->time);
+	glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
+	glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
 	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 
@@ -224,32 +251,39 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
 
-	vec2s res = { 1920.0f, 1080.0f };
+	vec2s res = { 640.0f , 480.0f };
 
 	ren->clear_color[0] = 0.0;
 	ren->clear_color[1] = 0.0;
 	ren->clear_color[2] = 0.0;
 	ren->clear_color[3] = 0.0;
 	ren->clear_depth = 1.0;
-	ren->ray_count = 8;
-	ren->max_steps = 8;
-	ren->tone = (vec3s){ 1.0f, 1.0f, 1.0f };
+	ren->constant = 0.572;
+	ren->linear = 0.076;
+	ren->quadratic = 4.54;
+	ren->ray_count = 64;
+	ren->max_steps = 32;
+	ren->show_dist = false;
+	ren->use_noise = true;
 
 	ren->scene_fbo.width = res.x;
 	ren->scene_fbo.height = res.y;
 	ren->scene_fbo.aspect = ren->scene_fbo.width / ren->scene_fbo.height;
-	ren->scene_fbo.render_tex.width = ren->scene_fbo.width;
-	ren->scene_fbo.render_tex.height = ren->scene_fbo.height;
-	ren->scene_fbo.render_tex.internal_format = GL_RGBA32F;
+	ren->scene_fbo.render_tex[0].width = ren->scene_fbo.width;
+	ren->scene_fbo.render_tex[0].height = ren->scene_fbo.height;
+	ren->scene_fbo.render_tex[0].internal_format = GL_RGBA32F;
+	ren->scene_fbo.render_tex[1].width = ren->scene_fbo.width;
+	ren->scene_fbo.render_tex[1].height = ren->scene_fbo.height;
+	ren->scene_fbo.render_tex[1].internal_format = GL_R32F;
 
 	ren->lighting_fbo.width = res.x;
 	ren->lighting_fbo.height = res.y;
 	ren->lighting_fbo.aspect = ren->lighting_fbo.width / ren->lighting_fbo.height;
-	ren->lighting_fbo.render_tex.width = ren->lighting_fbo.width;
-	ren->lighting_fbo.render_tex.height = ren->lighting_fbo.height;
-	ren->lighting_fbo.render_tex.internal_format = GL_RGBA32F;
+	ren->lighting_fbo.render_tex[0].width = ren->lighting_fbo.width;
+	ren->lighting_fbo.render_tex[0].height = ren->lighting_fbo.height;
+	ren->lighting_fbo.render_tex[0].internal_format = GL_RGBA32F;
 
-	create_framebuffer(&ren->scene_fbo);
+	create_scene_framebuffer(&ren->scene_fbo);
 	create_framebuffer(&ren->lighting_fbo);
 	create_fullscreen_vao(ren);
 	create_sdf_buffer(ren, scene);

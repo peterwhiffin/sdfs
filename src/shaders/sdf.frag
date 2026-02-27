@@ -51,8 +51,10 @@ layout(location = 6) uniform vec2 mouse_pos;
 layout(location = 7) uniform vec2 resolution;
 layout(location = 8) uniform vec2 cam_pos;
 layout(location = 9) uniform int num_entities;
+layout(location = 10) uniform float cam_size;
 
 layout(location = 0) out vec4 frag_color;
+layout(location = 1) out float distance_field;
 
 layout(binding = 0, std430) readonly buffer ssbo1 {
         entity entities[];
@@ -163,7 +165,8 @@ sdf map() {
         sdf_info.closest_index = 0;
 
         vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution.y;
-        frag_pos *= 10.0;
+
+        frag_pos *= cam_size;
         frag_pos += cam_pos;
 
         for (int i = 0; i < num_entities; i++) {
@@ -184,20 +187,16 @@ void main()
 {
         sdf sdf_info = map();
 
-        float epsilon = 0.001;
         vec4 col = vec4(0.0);
+        float df = sdf_info.min_dist * (1.0 / (cam_size * 2.0));
 
-        if (sdf_info.min_dist <= epsilon) {
-                uint i = sdf_info.closest_index;
-                float a = entities[i].is_light ? 1.0 : 0.0;
-                col = vec4(entities[i].color.rgb, a);
-        } else {
-                //this is dividing by 10(* 0.1) for the camera size,
-                //making max distance value 2.0(-1.0  to 1.0),
-                //and dividing by 2(* 0.5) to put distances in 0.0 to 1.0 space,
-                //and then multiplying by lowest res component to put in pixel units for the lighting shader.
-                col.r = (sdf_info.min_dist * 0.05) * resolution.y;
+        uint i = sdf_info.closest_index;
+
+        if (sdf_info.min_dist <= 0.001) {
+                col = vec4(entities[i].color.rgb, 1.0);
+                df = 0.0;
         }
 
+        distance_field = df;
         frag_color = col;
 }

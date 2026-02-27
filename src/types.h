@@ -81,7 +81,7 @@ struct mesh {
 };
 
 struct framebuffer {
-	struct texture render_tex;
+	struct texture render_tex[2];
 	struct texture depth_tex;
 	GLuint id;
 	float width;
@@ -93,11 +93,13 @@ struct renderer {
 	struct framebuffer scene_fbo;
 	struct framebuffer lighting_fbo;
 	struct mesh quad_mesh;
-	vec3s tone;
 	float clear_color[4];
 	float clear_depth;
 	float time;
 	float delta_time;
+	float constant;
+	float linear;
+	float quadratic;
 	bool use_noise;
 	bool show_dist;
 	GLuint ray_count;
