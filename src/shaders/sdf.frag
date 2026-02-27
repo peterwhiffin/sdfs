@@ -6,13 +6,12 @@
 // 	TRIANGLE,
 // };
 
-// enum edit_type { NONE = 0, UNION, SUBTRACTION, INTERSECTION, SMOOTH_UNION, SMOOTH_SUBTRACTION, SMOOTH_INTERSECTION } ;
+// enum edit_type { UNION = 1, SUBTRACTION, INTERSECTION, SMOOTH_UNION, SMOOTH_SUBTRACTION, SMOOTH_INTERSECTION } ;
 
 const uint CIRCLE = 1;
 const uint BOX = 2;
 const uint TRIANGLE = 3;
 
-const uint NONE = 0;
 const uint UNION = 1;
 const uint SUBTRACTION = 2;
 const uint INTERSECTION = 3;
@@ -20,13 +19,14 @@ const uint SMOOTH_UNION = 4;
 const uint SMOOTH_SUBTRACTION = 5;
 const uint SMOOTH_INTERSECTION = 6;
 
-// struct entity {
+// struct sdf_shape {
 // 	struct transform transform;
 // 	vec4s dim;
 // 	vec4s color;
 // 	float blend;
 // 	enum shape_type shape_type;
 // 	enum edit_type edit_type;
+// 	bool is_light;
 // };
 
 struct entity {
@@ -36,6 +36,12 @@ struct entity {
         float blend;
         uint shape_type;
         uint edit_type;
+        bool is_light;
+};
+
+struct sdf {
+        float min_dist;
+        uint closest_index;
 };
 
 layout(location = 2) in vec2 tex_coord;
@@ -85,11 +91,11 @@ float opUnion(float a, float b) {
 }
 
 float opSubtraction(float a, float b) {
-        return -opUnion(a, -b);
+        return max(-a, b);
 }
 
 float opIntersection(float a, float b) {
-        return -opUnion(-a, -b);
+        return max(a, b);
 }
 
 float opSmoothUnion(float a, float b, float k)
@@ -123,90 +129,75 @@ float sdSineWave(vec2 p, float freq, float thick, float phase) {
         return line;
 }
 
-vec4 map() {
-        vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
+float get_distance(uint i, vec2 pos) {
+        switch (entities[i].shape_type) {
+                case CIRCLE:
+                return sdCircle(pos, entities[i].dim.x);
+                case BOX:
+                return sdBox(pos, entities[i].dim.yx);
+                case TRIANGLE:
+                return sdEquilateralTriangle(pos, entities[i].dim.x);
+        }
+}
+
+float get_min(uint i, float m, float d) {
+        switch (entities[i].edit_type) {
+                case UNION:
+                return opUnion(d, m);
+                case SUBTRACTION:
+                return opSubtraction(d, m);
+                case INTERSECTION:
+                return opIntersection(d, m);
+                case SMOOTH_UNION:
+                return opSmoothUnion(d, m, entities[i].blend);
+                case SMOOTH_SUBTRACTION:
+                return opSmoothSubtraction(d, m, entities[i].blend);
+                case SMOOTH_INTERSECTION:
+                return opSmoothIntersection(d, m, entities[i].blend);
+        }
+}
+
+sdf map() {
+        sdf sdf_info;
+        sdf_info.min_dist = 20.0;
+        sdf_info.closest_index = 0;
+
+        vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution.y;
         frag_pos *= 10.0;
         frag_pos += cam_pos;
 
-        vec4 m;
-        m.a = 1.0;
-        m.rgb = vec3(0.0, 0.0, 0.0);
-
         for (int i = 0; i < num_entities; i++) {
                 vec2 pos = frag_pos - entities[i].position;
-                float d = 1.0;
 
-                switch (entities[i].shape_type) {
-                        case CIRCLE:
-                        d = sdCircle(pos, entities[i].dim.x);
-                        break;
-                        case BOX:
-                        d = sdBox(pos, entities[i].dim.yx);
-                        break;
-                        case TRIANGLE:
-                        d = sdEquilateralTriangle(pos, entities[i].dim.x);
-                        break;
+                float d = get_distance(i, pos);
+                float m = get_min(i, sdf_info.min_dist, d);
+
+                if (m < sdf_info.min_dist) {
+                        sdf_info.min_dist = m;
+                        sdf_info.closest_index = i;
                 }
-
-                float temp = m.a;
-
-                switch (entities[i].edit_type) {
-                        case UNION:
-                        m.a = opUnion(d, m.a);
-                        break;
-                        case SUBTRACTION:
-                        m.a = opSubtraction(d, m.a);
-                        break;
-                        case INTERSECTION:
-                        m.a = opIntersection(d, m.a);
-                        break;
-                        case SMOOTH_UNION:
-                        m.a = opSmoothUnion(d, m.a, entities[i].blend);
-                        break;
-                        case SMOOTH_SUBTRACTION:
-                        m.a = opSmoothSubtraction(d, m.a, entities[i].blend);
-                        break;
-                        case SMOOTH_INTERSECTION:
-                        m.a = opSmoothIntersection(d, m.a, entities[i].blend);
-                        break;
-                }
-
-                // if (m.a < temp) {
-                //         m.rgb = entities[i].color.rgb;
-                // }
-                m.rgb = mix(m.rgb, entities[i].color.rgb, temp - m.a);
-                // m.rgb = smoothstep(m.rgb, entities[i].color.rgb, temp - m.a);
         }
 
-        return m;
+        return sdf_info;
 }
 void main()
 {
-        vec4 m = map();
+        sdf sdf_info = map();
 
-        float epsilon = 0.00;
-        vec4 col = vec4(0.0, 0.0, 0.0, 0.0);
+        float epsilon = 0.001;
+        vec4 col = vec4(0.0);
 
-        if (m.a < epsilon) {
-                // col = vec3(0.0, 0.8, 0.1);
-                col = vec4(m.rgb, 1.0);
+        if (sdf_info.min_dist <= epsilon) {
+                uint i = sdf_info.closest_index;
+                float a = entities[i].is_light ? 1.0 : 0.0;
+                col = vec4(entities[i].color.rgb, a);
         } else {
-                col.r = (m.a / 10.0) * resolution.x;
+                //this is dividing by 10(* 0.1) for the camera size,
+                //making max distance value 2.0(-1.0  to 1.0),
+                //and dividing by 2(* 0.5) to put distances in 0.0 to 1.0 space,
+                //and then multiplying by lowest res component to put in pixel units for the lighting shader.
+                col.r = (sdf_info.min_dist * 0.05) * resolution.y;
         }
-
-        // else if (m.a < epsilon) {
-        //         col = vec4(1.0, 1.0, 1.0, 1.0);
-        // }
-
-        // vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution;
-        // frag_pos *= 10.0;
-        // frag_pos += cam_pos;
-
-        // float light_d = distance(frag_pos, cam_pos);
-
-        // float mag = length(col);
-        // col *= 0.05 / 1.0 - sdCircle(vec2(2.0, 1.0) - frag_pos, 2.5);
-        // col.rgb *= 1.45 / distance(frag_pos, vec2(0.0, 4.0));
 
         frag_color = col;
 }

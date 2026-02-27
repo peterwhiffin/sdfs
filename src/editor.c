@@ -25,6 +25,7 @@ struct sdf_shape *entity_add_sdf(struct scene *scene, struct entity *entity)
 	sdf->color = (vec4s){ 0.0, 0.8, 0.1, 1.0 };
 	sdf->edit_type = SMOOTH_UNION;
 	sdf->blend = 0.5f;
+	sdf->is_light = true;
 	entity->sdf = sdf;
 	scene->num_sdfs++;
 	return sdf;
@@ -96,6 +97,7 @@ void draw_inspector(struct editor *editor)
 		ImGui_DragFloat4Ex("dim", &sdf->dim.x, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_DragFloatEx("blend", &sdf->blend, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_ColorEdit4("Color", &sdf->color.r, 0);
+		ImGui_Checkbox("Is Light", &sdf->is_light);
 		char shape_label[128];
 		switch (sdf->shape_type) {
 		case BOX:
@@ -110,17 +112,12 @@ void draw_inspector(struct editor *editor)
 		}
 
 		if (ImGui_BeginCombo("Shape", shape_label, 0)) {
-			if (ImGui_Selectable("Box")) {
+			if (ImGui_Selectable("Box")) 
 				sdf->shape_type = BOX;
-			}
-
-			if (ImGui_Selectable("Circle")) {
+			if (ImGui_Selectable("Circle")) 
 				sdf->shape_type = CIRCLE;
-			}
-
-			if (ImGui_Selectable("Triangle")) {
+			if (ImGui_Selectable("Triangle")) 
 				sdf->shape_type = TRIANGLE;
-			}
 
 			ImGui_EndCombo();
 		}
@@ -177,7 +174,7 @@ void draw_debug(struct editor *editor)
 	ImGui_DragIntEx("Ray count", &editor->ren->ray_count, 1.0, 0, 128, NULL, 0);
 	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex.width, NULL, 0);
 	ImGui_Checkbox("Use noise", &editor->ren->use_noise);
-	ImGui_Checkbox("Use eps", &editor->ren->use_eps);
+	ImGui_Checkbox("Show distance", &editor->ren->show_dist);
 
 	if (ImGui_Button("Add Entity")) {
 		struct entity *e = entity_get_new(editor->scene);
@@ -270,6 +267,7 @@ void scene_init(struct scene *scene)
 	scene->sdfs[3].shape_type = BOX;
 	scene->sdfs[3].dim = (vec4s){ 0.23f, 6.1f, 2.0f, 2.0f };
 	scene->sdfs[3].color = (vec4s){ 0.0f, 0.0f, 0.0f, 1.0f };
+	scene->sdfs[3].is_light = false;
 }
 
 void editor_init(struct renderer *ren, struct scene *scene, struct window *win, struct editor *editor)

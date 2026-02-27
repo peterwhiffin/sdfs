@@ -201,7 +201,7 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glUniform1ui(11, ren->ray_count);
 	glUniform1ui(12, ren->max_steps);
 	glUniform1ui(14, ren->use_noise);
-	glUniform1ui(15, ren->use_eps);
+	glUniform1ui(15, ren->show_dist);
 	glBindTextureUnit(0, ren->scene_fbo.render_tex.id);
 	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
@@ -224,7 +224,7 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
 
-	vec2s res = { 800.0f, 800.0f };
+	vec2s res = { 1920.0f, 1080.0f };
 
 	ren->clear_color[0] = 0.0;
 	ren->clear_color[1] = 0.0;

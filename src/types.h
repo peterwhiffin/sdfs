@@ -9,8 +9,7 @@
 enum shape_type { CIRCLE = 1, BOX, TRIANGLE, NUM_SHAPES };
 
 enum edit_type {
-	NONE = 0,
-	UNION,
+	UNION = 1,
 	SUBTRACTION,
 	INTERSECTION,
 	SMOOTH_UNION,
@@ -30,6 +29,7 @@ struct sdf_shape {
 	float blend;
 	enum shape_type shape_type;
 	enum edit_type edit_type;
+	bool is_light;
 };
 
 struct camera {
@@ -99,7 +99,7 @@ struct renderer {
 	float time;
 	float delta_time;
 	bool use_noise;
-	bool use_eps;
+	bool show_dist;
 	GLuint ray_count;
 	GLuint max_steps;
 	GLuint sdf_shader;
