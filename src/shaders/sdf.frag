@@ -41,6 +41,7 @@ struct entity {
 
 struct sdf {
         float min_dist;
+        float min_light_dist;
         uint closest_index;
 };
 
@@ -54,7 +55,7 @@ layout(location = 9) uniform int num_entities;
 layout(location = 10) uniform float cam_size;
 
 layout(location = 0) out vec4 frag_color;
-layout(location = 1) out float distance_field;
+layout(location = 1) out vec2 distance_field;
 
 layout(binding = 0, std430) readonly buffer ssbo1 {
         entity entities[];
@@ -162,6 +163,7 @@ float get_min(uint i, float m, float d) {
 sdf map() {
         sdf sdf_info;
         sdf_info.min_dist = 20.0;
+        sdf_info.min_light_dist = 20.0;
         sdf_info.closest_index = 0;
 
         vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution.y;
@@ -178,6 +180,9 @@ sdf map() {
                 if (m < sdf_info.min_dist) {
                         sdf_info.min_dist = m;
                         sdf_info.closest_index = i;
+                        if (entities[i].is_light) {
+                                sdf_info.min_light_dist = m;
+                        }
                 }
         }
 
@@ -187,16 +192,20 @@ void main()
 {
         sdf sdf_info = map();
 
-        vec4 col = vec4(0.0);
-        float df = sdf_info.min_dist * (1.0 / (cam_size * 2.0));
-
+        vec4 col = vec4(0.1, 0.2, 0.7, 0.0);
+        // vec4 col = vec4(0.0);
+        float df = sdf_info.min_light_dist * (1.0 / (cam_size * 2.0));
+        float shadow_df = sdf_info.min_dist * (1.0 / (cam_size * 2.0));
         uint i = sdf_info.closest_index;
 
-        if (sdf_info.min_dist <= 0.001) {
-                col = vec4(entities[i].color.rgb, 1.0);
-                df = 0.0;
+        if (sdf_info.min_dist < 0.001) {
+                col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist), 1.0);
+                // col = vec4(entities[i].color.rgb, 1.0);
+
+                if (!entities[i].is_light)
+                        col.a = 0.0;
         }
 
-        distance_field = df;
+        distance_field = vec2(df, shadow_df);
         frag_color = col;
 }

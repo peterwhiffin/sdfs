@@ -198,6 +198,9 @@ void reload_shaders(struct renderer *ren)
 	glUseProgram(ren->sdf_shader);
 	float res[2] = { ren->scene_fbo.width, ren->scene_fbo.height };
 	glUniform2fv(7, 1, &res[0]);
+
+	glUseProgram(ren->lighting_shader);
+	glUniform2fv(13, 1, &res[0]);
 	printf("reloading shaders\n");
 }
 
@@ -228,6 +231,7 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glUniform1fv(17,1, &ren->linear);
 	glUniform1fv(18,1, &ren->quadratic);
 	glUniform1fv(19,1, &ren->time);
+	glUniform1ui(20, ren->show_shadow_blocker);
 	glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
 	glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
 	glBindVertexArray(ren->quad_mesh.vao);
@@ -250,21 +254,25 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 {
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
-
+	// glEnable(GL_BLEND);
+	// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// vec2s res = { 1920.0f ,1080.0f };
 	vec2s res = { 640.0f , 480.0f };
+	// vec2s res = { 256.0f , 256.0f };
 
 	ren->clear_color[0] = 0.0;
 	ren->clear_color[1] = 0.0;
 	ren->clear_color[2] = 0.0;
 	ren->clear_color[3] = 0.0;
 	ren->clear_depth = 1.0;
-	ren->constant = 0.572;
-	ren->linear = 0.076;
-	ren->quadratic = 4.54;
-	ren->ray_count = 64;
+	ren->constant = 0.873;
+	ren->linear = 0.014;
+	ren->quadratic = 0.02;
+	ren->ray_count = 128;
 	ren->max_steps = 32;
 	ren->show_dist = false;
 	ren->use_noise = true;
+	ren->show_shadow_blocker = false;
 
 	ren->scene_fbo.width = res.x;
 	ren->scene_fbo.height = res.y;
@@ -274,7 +282,7 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	ren->scene_fbo.render_tex[0].internal_format = GL_RGBA32F;
 	ren->scene_fbo.render_tex[1].width = ren->scene_fbo.width;
 	ren->scene_fbo.render_tex[1].height = ren->scene_fbo.height;
-	ren->scene_fbo.render_tex[1].internal_format = GL_R32F;
+	ren->scene_fbo.render_tex[1].internal_format = GL_RG32F;
 
 	ren->lighting_fbo.width = res.x;
 	ren->lighting_fbo.height = res.y;

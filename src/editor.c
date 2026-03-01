@@ -194,6 +194,7 @@ void draw_debug(struct editor *editor)
 	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex[0].width, NULL, 0);
 	ImGui_Checkbox("Use noise", &editor->ren->use_noise);
 	ImGui_Checkbox("Show distance", &editor->ren->show_dist);
+	ImGui_Checkbox("Show shadow blocker", &editor->ren->show_shadow_blocker);
 
 	if (ImGui_Button("Add Entity")) {
 		struct entity *e = entity_get_new(editor->scene);
@@ -270,23 +271,30 @@ void scene_init(struct scene *scene)
 		entity_add_sdf(scene, entity_get_new(scene));
 	}
 
-	scene->sdfs[0].transform.pos = (vec2s){ -0.59f, 5.7f };
-	scene->sdfs[0].dim = (vec4s){ 2.0f, 2.0f, 2.0f, 2.0f };
+	scene->sdfs[0].transform.pos = (vec2s){ 14.31f, 18.48f };
+	scene->sdfs[0].dim = (vec4s){ 2.76f, 2.0f, 2.0f, 2.0f };
 	scene->sdfs[0].color = (vec4s){ 1.0f, 1.0f, 1.0f, 1.0f };
+	scene->sdfs[0].is_light = true;
 
-	scene->sdfs[1].transform.pos = (vec2s){ 6.27f, 6.5f };
-	scene->sdfs[1].dim = (vec4s){ 1.1f, 2.0f, 2.0f, 2.0f };
-	scene->sdfs[1].color = (vec4s){ 12.0f / 255, 0.0f, 204.0f / 255, 1.0f };
+	scene->sdfs[1].transform.pos = (vec2s){ 4.67f, -4.0f };
+	scene->sdfs[1].dim = (vec4s){ 0.9f, 11.8f, 2.0f, 2.0f };
+	scene->sdfs[1].color = (vec4s){ 0.0f, 1.0f, 1.0f, 1.0f };
+	scene->sdfs[1].is_light = true;
+	scene->sdfs[1].shape_type = BOX;
+	scene->sdfs[1].edit_type = UNION;
 
-	scene->sdfs[2].transform.pos = (vec2s){ -7.1f, 9.6f };
-	scene->sdfs[2].dim = (vec4s){ 2.0f, 2.0f, 2.0f, 2.0f };
-	scene->sdfs[2].color = (vec4s){ 192.0f / 255, 0.0f, 204.0f / 255, 1.0f };
+	scene->sdfs[2].transform.pos = (vec2s){ 4.5f, 1.58f };
+	scene->sdfs[2].dim = (vec4s){ 0.8f, 14.8f, 2.0f, 2.0f };
+	scene->sdfs[2].color = (vec4s){ 0.0f, 0.0f, 1.0f, 1.0f };
+	scene->sdfs[2].shape_type = BOX;
+	scene->sdfs[2].edit_type = UNION;
+	scene->sdfs[2].is_light = false;
 
-	scene->sdfs[3].transform.pos = (vec2s){ 4.5f, -0.7f };
-	scene->sdfs[3].shape_type = BOX;
-	scene->sdfs[3].dim = (vec4s){ 0.23f, 6.1f, 2.0f, 2.0f };
-	scene->sdfs[3].color = (vec4s){ 0.0f, 0.0f, 0.0f, 1.0f };
-	scene->sdfs[3].is_light = false;
+	scene->sdfs[3].transform.pos = (vec2s){ -9.43f, 19.9f };
+	scene->sdfs[3].dim = (vec4s){ 3.73f, 2.0f, 2.0f, 2.0f };
+	scene->sdfs[3].color = (vec4s){ 1.0f, 0.0f, 1.0f, 1.0f };
+	scene->sdfs[3].is_light = true;
+	scene->sdfs[3].edit_type = UNION;
 }
 
 void editor_init(struct renderer *ren, struct scene *scene, struct window *win, struct editor *editor)
@@ -296,10 +304,9 @@ void editor_init(struct renderer *ren, struct scene *scene, struct window *win, 
 	editor->win = win;
 	editor->selected_entity = NULL;
 	editor->cam_speed = 10.0f;
-	editor->scene_cam.size = 10.0f;
-	editor->scene_cam.target.pos = (vec2s){ 0.0f, 3.0f };
-	editor->scene_cam.transform.pos = (vec2s){ 0.0f, 3.0f };
-	editor->scene_cam.size = 10.0f;
+	editor->scene_cam.size = 15.62f;
+	editor->scene_cam.target.pos = (vec2s){ 0.0f, 10.0f };
+	editor->scene_cam.transform.pos = (vec2s){ 0.0f, 10.0f };
 	scene_init(scene);
 	ImGuiContext *ctx = ImGui_CreateContext(NULL);
 	ImGui_SetCurrentContext(ctx);

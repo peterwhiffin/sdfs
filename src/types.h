@@ -102,6 +102,7 @@ struct renderer {
 	float quadratic;
 	bool use_noise;
 	bool show_dist;
+	bool show_shadow_blocker;
 	GLuint ray_count;
 	GLuint max_steps;
 	GLuint sdf_shader;
