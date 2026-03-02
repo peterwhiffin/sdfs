@@ -111,22 +111,14 @@ float opSmoothUnion(float a, float b, float k)
 float opSmoothSubtraction(float a, float b, float k)
 {
         return -opSmoothUnion(a, -b, k);
-
-        // k *= 4.0;
-        // float h = max(k-abs(-a-b),0.0);
-        // return max(-a, b) + h*h*0.25/k;
 }
 
 float opSmoothIntersection(float a, float b, float k)
 {
         return -opSmoothUnion(-a, -b, k);
-
-        // k *= 4.0;
-        // float h = max(k-abs(a-b),0.0);
-        // return max(a, b) + h*h*0.25/k;
 }
 
-float sdSineWave(vec2 p, float freq, float thick, float phase) {
+float sineWave(vec2 p, float freq, float thick, float phase) {
         // vec2 st = gl_FragCoord.xy / vec2(800, 600);
         float y = sin(p.x * freq + phase) * 0.1;
         float line = 1.0 - smoothstep(thick, 0.0, abs(p.y - (y + 0.5)));
@@ -171,7 +163,7 @@ sdf map() {
 
         frag_pos *= cam_size;
         frag_pos += cam_pos;
-
+        /////
         for (int i = 0; i < num_entities; i++) {
                 vec2 pos = frag_pos - entities[i].position;
 
@@ -194,9 +186,6 @@ void main()
         sdf sdf_info = map();
 
         vec4 col = vec4(0.1, 0.2, 0.7, 0.0);
-        // vec4 col = vec4(0.0);
-        float df = sdf_info.min_light_dist * (1.0 / (cam_size * 2.0));
-        float shadow_df = sdf_info.min_dist * (1.0 / (cam_size * 2.0));
         uint i = sdf_info.closest_index;
 
         if (sdf_info.min_dist < 0.001) {
@@ -204,6 +193,6 @@ void main()
                 col = vec4(entities[i].color.rgb, 1.0) * entities[i].brightness;
         }
 
-        distance_field = vec2(df, shadow_df);
+        distance_field = vec2(sdf_info.min_light_dist, sdf_info.min_dist) * (1.0 / (cam_size * 2.0));
         frag_color = col;
 }

@@ -32,79 +32,65 @@ float rand(vec2 co) {
 }
 
 vec4 ray_march() {
-        vec4 start_color = texture(tex, tex_coord);
-        vec4 start_dist = texture(distance_tex, tex_coord);
-
         float epsilon = 0.0001;
-
-        if (start_dist.r < 0.0) {
-                return start_color * start_color.a;
-        }
-
         float one_over_ray_count = 1.0 / float(ray_count);
         float tau_over_ray_count = TAU * one_over_ray_count;
         float noise = use_noise ? rand(tex_coord) : 0.0;
-        vec4 radiance = start_color * ambient;
-        float aspect = res.x / res.y;
-        float one_over_aspect = 1.0 / aspect;
+        float aspect = res.y / res.x;
+
+        vec4 start_color = texture(tex, tex_coord);
+        vec4 start_dist = texture(distance_tex, tex_coord);
+        vec4 radiance = vec4(0.0);
 
         for (int i = 0; i < ray_count; i++) {
                 float angle = tau_over_ray_count * (float(i) + noise);
-                vec2 ray_direction_uv = vec2(cos(angle), -sin(angle));
-                float next_dist_light = start_dist.r;
-                float next_dist_shadow = start_dist.g;
+                float angle_c = cos(angle);
+                float angle_s = sin(angle);
+                float dist_mod = max(abs(angle_c), abs(angle_s));
+                float total_dist = start_dist.g;
 
-                vec2 sample_uv = tex_coord + ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
-                if (next_dist_shadow <= 0.001) {
-                        next_dist_shadow = abs(next_dist_shadow);
-                        float min_dist = abs(next_dist_shadow);
-                        min_dist = 0.005;
-                        float check = start_dist.g;
+                vec2 ray_direction_uv = vec2(angle_c, -angle_s);
+                vec2 sample_uv = tex_coord + ray_direction_uv * vec2(start_dist.g * aspect, start_dist.g);
+                vec4 sample_dist = start_dist;
 
-                        // float pixel_dist = 1.0 / res.y;
-                        // vec4 smap = texture(distance_tex, tex_coord + ray_direction_uv * vec2(pixel_dist * one_over_aspect, pixel_dist));
+                //march out of shadow caster
+                if (start_dist.g <= epsilon) {
+                        float dist = abs(start_dist.g);
+                        sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
+                        total_dist = dist;
+                        float min_dist = 0.005;
 
-                        for (int l = 0; l < 32; l++) {
-                                // if (smap.g <= start_dist.g) {
-                                //         break;
-                                // }
-                                if (check >= 0.001) {
+                        for (int j = 0; j < 32; j++) {
+                                sample_dist = texture(distance_tex, sample_uv);
+
+                                if (sample_dist.g >= epsilon || sample_dist.r < epsilon) {
                                         break;
                                 }
 
-                                sample_uv += ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
-                                vec4 d2 = texture(distance_tex, sample_uv);
-
-                                if (d2.r < 0.0001) {
-                                        break;
-                                }
-
-                                check = d2.g;
-                                next_dist_shadow = abs(d2.g) / max(abs(sin(angle)), abs(cos(angle)));
-                                next_dist_shadow = max(next_dist_shadow, min_dist);
+                                dist = max(abs(sample_dist.g) / dist_mod, min_dist);
+                                total_dist += dist;
+                                sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
                         }
                 }
 
-                float total_dist = next_dist_shadow;
-
+                //march
                 for (int s = 0; s < max_steps; s++) {
-                        if (next_dist_light < 0.0001) {
-                                sample_uv += ray_direction_uv * 0.01;
-                                float falloff = 1.0 / (constant + (linear * total_dist) + (quadratic * (total_dist * total_dist)));
+                        if (out_of_bounds(sample_uv)) break;
+
+                        sample_dist = texture(distance_tex, sample_uv);
+
+                        if (sample_dist.r < epsilon) {
+                                sample_uv += ray_direction_uv * vec2(0.01 * aspect, 0.01);
                                 vec4 col = texture(tex, sample_uv);
-                                radiance += (col + start_color * 1.0) * falloff;
+                                float falloff = 1.0 / (constant + (linear * total_dist) + (quadratic * (total_dist * total_dist)));
+                                radiance += col * start_color * falloff;
                                 break;
-                        } else if (next_dist_shadow < 0.00001) {
+                        } else if (sample_dist.g < epsilon) {
                                 break;
                         }
 
-                        vec4 distances = texture(distance_tex, sample_uv);
-                        next_dist_light = distances.r;
-                        next_dist_shadow = distances.g;
-                        sample_uv += ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
-                        if (out_of_bounds(sample_uv)) break;
-
-                        total_dist += next_dist_shadow;
+                        sample_uv += ray_direction_uv * vec2(sample_dist.g * aspect, sample_dist.g);
+                        total_dist += sample_dist.g;
                 }
         }
 
