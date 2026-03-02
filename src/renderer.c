@@ -6,7 +6,6 @@
 #include "renderer.h"
 
 #define SHADER_PATH "../../src/shaders/"
-// #define SHADER_PATH "..\\..\\src\\shaders\\"
 
 // clang-format off
 float quad_verts[16] = {
@@ -193,7 +192,6 @@ void reload_shaders(struct renderer *ren)
 	glDeleteProgram(ren->lighting_shader);
 	load_all_shaders(ren);
 
-	// glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ren->sdf_buff);
 
 	glUseProgram(ren->sdf_shader);
 	float res[2] = { ren->scene_fbo.width, ren->scene_fbo.height };
@@ -201,7 +199,7 @@ void reload_shaders(struct renderer *ren)
 
 	glUseProgram(ren->lighting_shader);
 	glUniform2fv(13, 1, &res[0]);
-	printf("reloading shaders\n");
+	printf("shaders reloaded\n");
 }
 
 void draw(struct renderer *ren, struct window *win, struct scene *scene, struct camera *cam)
@@ -257,23 +255,21 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 {
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 	glDisable(GL_DEPTH_TEST);
-	// glEnable(GL_BLEND);
-	// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	// vec2s res = { 1920.0f ,1080.0f };
 	vec2s res = { 640.0f , 480.0f };
 	// vec2s res = { 256.0f , 256.0f };
 
-	ren->clear_color[0] = 0.0;
-	ren->clear_color[1] = 0.0;
-	ren->clear_color[2] = 0.0;
-	ren->clear_color[3] = 0.0;
-	ren->clear_depth = 1.0;
+	ren->clear_color[0] = 0.0f;
+	ren->clear_color[1] = 0.0f;
+	ren->clear_color[2] = 0.0f;
+	ren->clear_color[3] = 0.0f;
+	ren->clear_depth = 1.0f;
 	ren->ambient = 0.1f;
 	ren->gamma= 0.51f;
-	ren->constant = 0.873;
-	ren->linear = 0.014;
+	ren->constant = 0.873f;
+	ren->linear = 0.014f;
 	ren->exposure = 2.48f;
-	ren->quadratic = 0.02;
+	ren->quadratic = 0.02f;
 	ren->ray_count = 128;
 	ren->max_steps = 32;
 	ren->show_dist = false;

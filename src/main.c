@@ -1,6 +1,4 @@
-#include "SDL3/SDL_gpu.h"
 #include "SDL3/SDL_keyboard.h"
-#include "SDL3/SDL_oldnames.h"
 #include "SDL3/SDL_timer.h"
 #include "cglm/types-struct.h"
 #include "stdio.h"
@@ -100,20 +98,6 @@ int main()
 
 	init_window(&win);
 	init_renderer(&ren, &win, &scene);
-
-	// struct sdf_shape *e = entity_add_sdf(&scene);
-	// struct sdf_shape *e2 = entity_add_sdf(&scene);
-	// struct sdf_shape *e3 = entity_add_sdf(&scene);
-	// struct sdf_shape *e4 = entity_add_sdf(&scene);
-	// e->transform.pos = (vec2s){ 10.0f, 0.0f };
-	// e->shape_type = TRIANGLE;
-	// e->dim.x = 3.0;
-	// // e->color = (vec4s){ 1.0, 0.0, 0.0, 1.0 };
-	// e3->transform.pos = (vec2s){ -12.0f, 3.0f };
-	// e3->shape_type = BOX;
-	// e3->dim = (vec4s){ 2.0f, 7.0f, 0.0f, 0.0f };
-	// e4->transform.pos = (vec2s){ 5.0f, -4.0f };
-
 	editor_init(&ren, &scene, &win, &editor);
 
 	ren.time = 0.0f;
@@ -125,6 +109,7 @@ int main()
 		input_update(&win);
 		draw(&ren, &win, &scene, &editor.scene_cam);
 		editor_update(&editor);
+		editor_draw(&editor);
 		SDL_GL_SwapWindow(win.sdl_win);
 	}
 

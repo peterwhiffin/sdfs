@@ -4,11 +4,8 @@
 #include "imgui/dcimgui.h"
 #include "imgui/dcimgui_impl_sdl3.h"
 #include "imgui/dcimgui_impl_opengl3.h"
-// #include <asm-generic/errno.h>
-// #include <iso646.h>
 #include <stdbool.h>
 #include <stdint.h>
-// #include <strings.h>
 #include "stdio.h"
 
 float float_min(float a, float b)
@@ -63,19 +60,11 @@ void draw_scene(struct editor *editor)
 		height = available_size.y;
 		width = height * aspect;
 	}
-	// float height = float_max(scene_fbo->render_tex.height, available_size.y);
-	// float width = height * aspect;
-	//
-	// if (width > available_size.x) {
-	// 	width = available_size.x;
-	// 	height = width * (1.0f / aspect);
-	// }
 
 	float y_offset = (available_size.y - height) * 0.5f;
 	float x_offset = (available_size.x - width) * 0.5f;
 	ImVec2 cursor_pos = ImGui_GetCursorPos();
 	ImVec2 centered_pos = { cursor_pos.x + x_offset, cursor_pos.y + y_offset };
-	// ImGui_SetCursorPosY(ImGui_GetCursorPosY() + y_offset);
 	ImGui_SetCursorPos(centered_pos);
 
 	ImVec2 image_size = { width, height };
@@ -197,8 +186,7 @@ void draw_debug(struct editor *editor)
 	ImGui_DragFloatEx("Quadratic", &editor->ren->quadratic, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragFloatEx("Exposure", &editor->ren->exposure, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragIntEx("Ray count", &editor->ren->ray_count, 1.0, 0, 1024, NULL, 0);
-	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex[0].width, NULL,
-			0);
+	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex[0].width, NULL, 0);
 	ImGui_Checkbox("Use noise", &editor->ren->use_noise);
 	ImGui_Checkbox("Show distance", &editor->ren->show_dist);
 	ImGui_Checkbox("Show shadow blocker", &editor->ren->show_shadow_blocker);
@@ -231,8 +219,7 @@ void editor_draw_end()
 void editor_draw(struct editor *editor)
 {
 	editor_draw_begin();
-	bool show_demo = true;
-	ImGui_ShowDemoWindow(&show_demo);
+	ImGui_ShowDemoWindow(NULL);
 	draw_scene(editor);
 	draw_hierarchy(editor);
 	draw_inspector(editor);
@@ -269,7 +256,6 @@ void editor_update(struct editor *editor)
 	cam_target->pos.y += win->movement.y * editor->cam_speed * editor->ren->delta_time;
 
 	editor_update_camera(&editor->scene_cam, editor->ren->delta_time);
-	editor_draw(editor);
 }
 
 void scene_init(struct scene *scene)
