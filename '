@@ -55,30 +55,30 @@ vec4 ray_march() {
                 float next_dist_shadow = start_dist.g;
 
                 vec2 sample_uv = tex_coord + ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
-                if (next_dist_shadow <= 0.001) {
-                        next_dist_shadow = abs(next_dist_shadow);
+                if (next_dist_shadow <= 0.0001) {
+                        next_dist_shadow = abs(next_dist_shadow) / max(abs(sin(angle)), abs(cos(angle)));
                         float min_dist = abs(next_dist_shadow);
-                        min_dist = 0.005;
-                        float check = start_dist.g;
+                        // next_dist_shadow = max(min_dist, next_dist_shadow);
+                        // next_dist_shadow = abs(next_dist_shadow) + 0.02;
 
-                        // float pixel_dist = 1.0 / res.y;
-                        // vec4 smap = texture(distance_tex, tex_coord + ray_direction_uv * vec2(pixel_dist * one_over_aspect, pixel_dist));
+                        sample_uv += ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
+                        vec4 d1 = texture(distance_tex, sample_uv);
+                        float check = d1.g;
 
                         for (int l = 0; l < 32; l++) {
-                                // if (smap.g <= start_dist.g) {
-                                //         break;
-                                // }
+                                if (d1.g < start_dist.g) {
+                                        // break;
+                                }
                                 if (check >= 0.001) {
                                         break;
                                 }
-
                                 sample_uv += ray_direction_uv * vec2(next_dist_shadow * one_over_aspect, next_dist_shadow);
                                 vec4 d2 = texture(distance_tex, sample_uv);
 
-                                if (d2.r < 0.0001) {
+                                if (d2.g < check) {
                                         break;
                                 }
-
+                                // next_dist_shadow = max(min_dist, d2.g);
                                 check = d2.g;
                                 next_dist_shadow = abs(d2.g) / max(abs(sin(angle)), abs(cos(angle)));
                                 next_dist_shadow = max(next_dist_shadow, min_dist);
@@ -92,7 +92,7 @@ vec4 ray_march() {
                                 sample_uv += ray_direction_uv * 0.01;
                                 float falloff = 1.0 / (constant + (linear * total_dist) + (quadratic * (total_dist * total_dist)));
                                 vec4 col = texture(tex, sample_uv);
-                                radiance += (col + start_color * 1.0) * falloff;
+                                radiance += (col * 1.0) * falloff;
                                 break;
                         } else if (next_dist_shadow < 0.00001) {
                                 break;

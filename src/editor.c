@@ -4,19 +4,20 @@
 #include "imgui/dcimgui.h"
 #include "imgui/dcimgui_impl_sdl3.h"
 #include "imgui/dcimgui_impl_opengl3.h"
-#include <asm-generic/errno.h>
-#include <iso646.h>
+// #include <asm-generic/errno.h>
+// #include <iso646.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <strings.h>
+// #include <strings.h>
 #include "stdio.h"
 
-float min(float a, float b)
+float float_min(float a, float b)
 {
 	return a < b ? a : b;
 }
 
-float max(float a, float b){
+float float_max(float a, float b)
+{
 	return a > b ? a : b;
 }
 
@@ -28,6 +29,7 @@ struct sdf_shape *entity_add_sdf(struct scene *scene, struct entity *entity)
 	sdf->shape_type = CIRCLE;
 	sdf->dim = (vec4s){ 2.0f, 2.0f, 2.0f, 2.0f };
 	sdf->color = (vec4s){ 0.0, 0.8, 0.1, 1.0 };
+	sdf->brightness= 1.0f;
 	sdf->edit_type = SMOOTH_UNION;
 	sdf->blend = 0.5f;
 	sdf->is_light = true;
@@ -54,14 +56,14 @@ void draw_scene(struct editor *editor)
 	ImTextureRef tex_ref = { NULL, lighting_fbo->render_tex[0].id };
 	ImVec2 available_size = ImGui_GetContentRegionAvail();
 	float aspect = editor->ren->scene_fbo.aspect;
-	float width = max(scene_fbo->render_tex[0].width, available_size.x);
+	float width = float_max(scene_fbo->render_tex[0].width, available_size.x);
 	float height = width / aspect;
 
-	if(height > available_size.y){
+	if (height > available_size.y) {
 		height = available_size.y;
 		width = height * aspect;
 	}
-	// float height = max(scene_fbo->render_tex.height, available_size.y);
+	// float height = float_max(scene_fbo->render_tex.height, available_size.y);
 	// float width = height * aspect;
 	//
 	// if (width > available_size.x) {
@@ -72,7 +74,7 @@ void draw_scene(struct editor *editor)
 	float y_offset = (available_size.y - height) * 0.5f;
 	float x_offset = (available_size.x - width) * 0.5f;
 	ImVec2 cursor_pos = ImGui_GetCursorPos();
-	ImVec2 centered_pos = {cursor_pos.x + x_offset, cursor_pos.y + y_offset};
+	ImVec2 centered_pos = { cursor_pos.x + x_offset, cursor_pos.y + y_offset };
 	// ImGui_SetCursorPosY(ImGui_GetCursorPosY() + y_offset);
 	ImGui_SetCursorPos(centered_pos);
 
@@ -113,6 +115,7 @@ void draw_inspector(struct editor *editor)
 		ImGui_DragFloat4Ex("dim", &sdf->dim.x, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_DragFloatEx("blend", &sdf->blend, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_ColorEdit4("Color", &sdf->color.r, 0);
+		ImGui_DragFloatEx("brightness", &sdf->brightness, 0.01f, 0.0f, 0.0f, NULL, 0);
 		ImGui_Checkbox("Is Light", &sdf->is_light);
 		char shape_label[128];
 		switch (sdf->shape_type) {
@@ -128,11 +131,11 @@ void draw_inspector(struct editor *editor)
 		}
 
 		if (ImGui_BeginCombo("Shape", shape_label, 0)) {
-			if (ImGui_Selectable("Box")) 
+			if (ImGui_Selectable("Box"))
 				sdf->shape_type = BOX;
-			if (ImGui_Selectable("Circle")) 
+			if (ImGui_Selectable("Circle"))
 				sdf->shape_type = CIRCLE;
-			if (ImGui_Selectable("Triangle")) 
+			if (ImGui_Selectable("Triangle"))
 				sdf->shape_type = TRIANGLE;
 
 			ImGui_EndCombo();
@@ -187,11 +190,15 @@ void draw_debug(struct editor *editor)
 	ImGui_Text("Frame time: %fms", editor->ren->delta_time * 1000.0f);
 	ImGui_Text("FPS: %f", 1.0f / editor->ren->delta_time);
 	ImGui_DragFloatEx("Cam size", &editor->scene_cam.size, 0.01f, 0.0f, 0.0f, NULL, 0);
+	ImGui_DragFloatEx("Ambient", &editor->ren->ambient, 0.001f, 0.0f, 0.0f, NULL, 0);
+	ImGui_DragFloatEx("Gamma", &editor->ren->gamma, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragFloatEx("Constant", &editor->ren->constant, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragFloatEx("Linear", &editor->ren->linear, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragFloatEx("Quadratic", &editor->ren->quadratic, 0.001f, 0.0f, 0.0f, NULL, 0);
+	ImGui_DragFloatEx("Exposure", &editor->ren->exposure, 0.001f, 0.0f, 0.0f, NULL, 0);
 	ImGui_DragIntEx("Ray count", &editor->ren->ray_count, 1.0, 0, 1024, NULL, 0);
-	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex[0].width, NULL, 0);
+	ImGui_DragIntEx("Max steps", &editor->ren->max_steps, 1.0, 0, editor->ren->scene_fbo.render_tex[0].width, NULL,
+			0);
 	ImGui_Checkbox("Use noise", &editor->ren->use_noise);
 	ImGui_Checkbox("Show distance", &editor->ren->show_dist);
 	ImGui_Checkbox("Show shadow blocker", &editor->ren->show_shadow_blocker);

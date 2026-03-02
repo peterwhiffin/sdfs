@@ -10,11 +10,11 @@ enum shape_type { CIRCLE = 1, BOX, TRIANGLE, NUM_SHAPES };
 
 enum edit_type {
 	UNION = 1,
-	SUBTRACTION,
-	INTERSECTION,
-	SMOOTH_UNION,
-	SMOOTH_SUBTRACTION,
-	SMOOTH_INTERSECTION,
+	SUBTRACTION = 2,
+	INTERSECTION = 3,
+	SMOOTH_UNION = 4,
+	SMOOTH_SUBTRACTION = 5,
+	SMOOTH_INTERSECTION = 6,
 	NUM_EDITS
 };
 
@@ -27,6 +27,7 @@ struct sdf_shape {
 	vec4s dim;
 	vec4s color;
 	float blend;
+	float brightness;
 	enum shape_type shape_type;
 	enum edit_type edit_type;
 	bool is_light;
@@ -97,9 +98,12 @@ struct renderer {
 	float clear_depth;
 	float time;
 	float delta_time;
+	float ambient;
+	float gamma;
 	float constant;
 	float linear;
 	float quadratic;
+	float exposure;
 	bool use_noise;
 	bool show_dist;
 	bool show_shadow_blocker;

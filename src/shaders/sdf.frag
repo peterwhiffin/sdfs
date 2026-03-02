@@ -34,6 +34,7 @@ struct entity {
         vec4 dim;
         vec4 color;
         float blend;
+        float brightness;
         uint shape_type;
         uint edit_type;
         bool is_light;
@@ -148,15 +149,15 @@ float get_min(uint i, float m, float d) {
                 case UNION:
                 return opUnion(d, m);
                 case SUBTRACTION:
-                return opSubtraction(d, m);
+                return opSubtraction(m, d);
                 case INTERSECTION:
                 return opIntersection(d, m);
                 case SMOOTH_UNION:
                 return opSmoothUnion(d, m, entities[i].blend);
                 case SMOOTH_SUBTRACTION:
-                return opSmoothSubtraction(d, m, entities[i].blend);
+                return opSmoothSubtraction(m, d, entities[i].blend);
                 case SMOOTH_INTERSECTION:
-                return opSmoothIntersection(d, m, entities[i].blend);
+                return opSmoothIntersection(m, d, entities[i].blend);
         }
 }
 
@@ -199,11 +200,8 @@ void main()
         uint i = sdf_info.closest_index;
 
         if (sdf_info.min_dist < 0.001) {
-                col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist), 1.0);
-                // col = vec4(entities[i].color.rgb, 1.0);
-
-                if (!entities[i].is_light)
-                        col.a = 0.0;
+                // col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist), 1.0) * entities[i].brightness;
+                col = vec4(entities[i].color.rgb, 1.0) * entities[i].brightness;
         }
 
         distance_field = vec2(df, shadow_df);

@@ -232,6 +232,9 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glUniform1fv(18,1, &ren->quadratic);
 	glUniform1fv(19,1, &ren->time);
 	glUniform1ui(20, ren->show_shadow_blocker);
+	glUniform1fv(21,1, &ren->exposure);
+	glUniform1fv(22,1, &ren->ambient);
+	glUniform1fv(23,1, &ren->gamma);
 	glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
 	glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
 	glBindVertexArray(ren->quad_mesh.vao);
@@ -265,8 +268,11 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	ren->clear_color[2] = 0.0;
 	ren->clear_color[3] = 0.0;
 	ren->clear_depth = 1.0;
+	ren->ambient = 0.1f;
+	ren->gamma= 0.51f;
 	ren->constant = 0.873;
 	ren->linear = 0.014;
+	ren->exposure = 2.48f;
 	ren->quadratic = 0.02;
 	ren->ray_count = 128;
 	ren->max_steps = 32;
