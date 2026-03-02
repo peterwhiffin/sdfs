@@ -41,7 +41,7 @@ struct entity {
 };
 
 struct sdf {
-        float min_dist;
+        vec3 min_dist;
         float min_light_dist;
         uint closest_index;
 };
@@ -56,7 +56,7 @@ layout(location = 9) uniform int num_entities;
 layout(location = 10) uniform float cam_size;
 
 layout(location = 0) out vec4 frag_color;
-layout(location = 1) out vec2 distance_field;
+layout(location = 1) out vec4 distance_field;
 
 layout(binding = 0, std430) readonly buffer ssbo1 {
         entity entities[];
@@ -72,10 +72,55 @@ float sdEquilateralTriangle(in vec2 p, in float r)
         return -length(p) * sign(p.y);
 }
 
+float cro(in vec2 a, in vec2 b) {
+        return a.x * b.y - a.y * b.x;
+}
+
+vec3 sdgTriangle(in vec2 p, in vec2 v[3])
+{
+        float gs = cro(v[0] - v[2], v[1] - v[0]);
+        vec4 res;
+
+        {
+                vec2 e = v[1] - v[0], w = p - v[0];
+                vec2 q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+                float d = dot(q, q), s = gs * cro(w, e);
+                res = vec4(d, q, s);
+        }
+        {
+                vec2 e = v[2] - v[1], w = p - v[1];
+                vec2 q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+                float d = dot(q, q), s = gs * cro(w, e);
+                res = vec4((d < res.x) ? vec3(d, q) : res.xyz,
+                                (s > res.w) ? s : res.w);
+        }
+        {
+                vec2 e = v[0] - v[2], w = p - v[2];
+                vec2 q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+                float d = dot(q, q), s = gs * cro(w, e);
+                res = vec4((d < res.x) ? vec3(d, q) : res.xyz,
+                                (s > res.w) ? s : res.w);
+        }
+
+        float d = sqrt(res.x) * sign(res.w);
+        return vec3(d, res.yz / d);
+}
+
 float sdBox(in vec2 p, in vec2 b)
 {
         vec2 d = abs(p) - b;
         return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+vec3 sdgBox(in vec2 p, in vec2 b)
+{
+        vec2 w = abs(p) - b;
+        vec2 s = vec2(p.x < 0.0 ? -1 : 1, p.y < 0.0 ? -1 : 1);
+        float g = max(w.x, w.y);
+        vec2 q = max(w, 0.0);
+        float l = length(q);
+        return vec3((g > 0.0) ? l : g,
+                s * ((g > 0.0) ? q / l : ((w.x > w.y) ? vec2(1, 0) : vec2(0, 1))));
 }
 
 float sdSegment(in vec2 p, in vec2 a, in vec2 b)
@@ -88,6 +133,12 @@ float sdSegment(in vec2 p, in vec2 a, in vec2 b)
 float sdCircle(vec2 p, float r)
 {
         return length(p) - r;
+}
+
+vec3 sdgCircle(in vec2 p, in float r)
+{
+        float d = length(p);
+        return vec3(d - r, p / d);
 }
 
 float opUnion(float a, float b) {
@@ -125,14 +176,21 @@ float sineWave(vec2 p, float freq, float thick, float phase) {
         return line;
 }
 
-float get_distance(uint i, vec2 pos) {
+vec3 get_distance(uint i, vec2 pos) {
         switch (entities[i].shape_type) {
                 case CIRCLE:
-                return sdCircle(pos, entities[i].dim.x);
+                return sdgCircle(pos, entities[i].dim.x);
                 case BOX:
-                return sdBox(pos, entities[i].dim.yx);
+                return sdgBox(pos, entities[i].dim.yx);
                 case TRIANGLE:
-                return sdEquilateralTriangle(pos, entities[i].dim.x);
+                float r = entities[i].dim.x;
+                vec2 ps[3];
+                float k = sqrt(3.0);
+                ps[0] = vec2(0.0, r / k);
+                ps[1] = vec2(r, -r);
+                ps[2] = vec2(-r, -r);
+
+                return sdgTriangle(pos, ps);
         }
 }
 
@@ -155,7 +213,7 @@ float get_min(uint i, float m, float d) {
 
 sdf map() {
         sdf sdf_info;
-        sdf_info.min_dist = 20.0;
+        sdf_info.min_dist.x = 20.0;
         sdf_info.min_light_dist = 20.0;
         sdf_info.closest_index = 0;
 
@@ -163,15 +221,17 @@ sdf map() {
 
         frag_pos *= cam_size;
         frag_pos += cam_pos;
-        /////
+
         for (int i = 0; i < num_entities; i++) {
                 vec2 pos = frag_pos - entities[i].position;
 
-                float d = get_distance(i, pos);
-                float m = get_min(i, sdf_info.min_dist, d);
+                vec3 d = get_distance(i, pos);
+                float m = get_min(i, sdf_info.min_dist.x, d.x);
 
-                if (m < sdf_info.min_dist) {
-                        sdf_info.min_dist = m;
+                if (m < sdf_info.min_dist.x) {
+                        sdf_info.min_dist.x = m;
+                        sdf_info.min_dist.y = d.y;
+                        sdf_info.min_dist.z = d.z;
                         sdf_info.closest_index = i;
                         if (entities[i].is_light) {
                                 sdf_info.min_light_dist = m;
@@ -186,13 +246,21 @@ void main()
         sdf sdf_info = map();
 
         vec4 col = vec4(0.1, 0.2, 0.7, 0.0);
+        vec4 dist = vec4(0.0);
         uint i = sdf_info.closest_index;
 
-        if (sdf_info.min_dist < 0.001) {
-                // col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist), 1.0) * entities[i].brightness;
-                col = vec4(entities[i].color.rgb, 1.0) * entities[i].brightness;
+        if (sdf_info.min_dist.x < 0.01) {
+                col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist.x), 1.0) * entities[i].brightness;
+                // col = vec4(entities[i].color.rgb, 1.0) * entities[i].brightness;
+
+                if (entities[i].is_light)
+                        dist.a = 1.0;
         }
 
-        distance_field = vec2(sdf_info.min_light_dist, sdf_info.min_dist) * (1.0 / (cam_size * 2.0));
+        // distance_field = vec2(sdf_info.min_light_dist, sdf_info.min_dist) * (1.0 / (cam_size * 2.0));
+        dist.r = sdf_info.min_dist.x * (1.0 / (cam_size * 2.0));
+        dist.g = sdf_info.min_dist.y * (1.0 / (cam_size * 2.0));
+        dist.b = sdf_info.min_dist.z * (1.0 / (cam_size * 2.0));
+        distance_field = dist;
         frag_color = col;
 }

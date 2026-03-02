@@ -42,34 +42,41 @@ vec4 ray_march() {
         vec4 start_dist = texture(distance_tex, tex_coord);
         vec4 radiance = vec4(0.0);
 
+        if (start_dist.a > 0.1) {
+                return start_color * 10.0;
+        }
+
         for (int i = 0; i < ray_count; i++) {
                 float angle = tau_over_ray_count * (float(i) + noise);
                 float angle_c = cos(angle);
                 float angle_s = sin(angle);
                 float dist_mod = max(abs(angle_c), abs(angle_s));
-                float total_dist = start_dist.g;
+                float total_dist = start_dist.r;
 
                 vec2 ray_direction_uv = vec2(angle_c, -angle_s);
-                vec2 sample_uv = tex_coord + ray_direction_uv * vec2(start_dist.g * aspect, start_dist.g);
+                vec2 sample_uv = tex_coord + ray_direction_uv * vec2(start_dist.r * aspect, start_dist.r);
                 vec4 sample_dist = start_dist;
 
                 //march out of shadow caster
-                if (start_dist.g <= epsilon) {
-                        float dist = abs(start_dist.g);
+                if (start_dist.r <= epsilon) {
+                        float dist = abs(start_dist.r);
                         sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
                         total_dist = dist;
                         float min_dist = 0.005;
 
-                        for (int j = 0; j < 32; j++) {
-                                sample_dist = texture(distance_tex, sample_uv);
+                        vec2 grad = vec2(start_dist.g, start_dist.b);
 
-                                if (sample_dist.g >= epsilon || sample_dist.r < epsilon) {
-                                        break;
+                        if (dot(ray_direction_uv, grad) > 0.00) {
+                                for (int j = 0; j < 32; j++) {
+                                        sample_dist = texture(distance_tex, sample_uv);
+
+                                        if (sample_dist.r >= epsilon)
+                                                break;
+
+                                        dist = max(abs(sample_dist.r) / dist_mod, min_dist);
+                                        total_dist += dist;
+                                        sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
                                 }
-
-                                dist = max(abs(sample_dist.g) / dist_mod, min_dist);
-                                total_dist += dist;
-                                sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
                         }
                 }
 
@@ -83,24 +90,25 @@ vec4 ray_march() {
                                 sample_uv += ray_direction_uv * vec2(0.01 * aspect, 0.01);
                                 vec4 col = texture(tex, sample_uv);
                                 float falloff = 1.0 / (constant + (linear * total_dist) + (quadratic * (total_dist * total_dist)));
-                                radiance += col * start_color * falloff;
+                                radiance += col * falloff * sample_dist.a;
                                 break;
                         } else if (sample_dist.g < epsilon) {
-                                break;
+                                // break;
                         }
 
-                        sample_uv += ray_direction_uv * vec2(sample_dist.g * aspect, sample_dist.g);
-                        total_dist += sample_dist.g;
+                        sample_uv += ray_direction_uv * vec2(sample_dist.r * aspect, sample_dist.r);
+                        total_dist += sample_dist.r;
                 }
         }
 
         return ((radiance / float(ray_count))) + start_color * ambient;
+        // return ((radiance / float(ray_count)));
 }
 
 void main() {
         if (show_dist) {
-                float dist = texture(distance_tex, tex_coord).r;
-                frag_color = vec4(vec3(dist), 1.0);
+                vec4 dist = texture(distance_tex, tex_coord);
+                frag_color = vec4(dist.rgb, 1.0);
         } else if (show_shadow) {
                 float dist = texture(distance_tex, tex_coord).g;
                 frag_color = vec4(vec3(dist), 1.0);

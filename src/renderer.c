@@ -284,7 +284,7 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	ren->scene_fbo.render_tex[0].internal_format = GL_RGBA32F;
 	ren->scene_fbo.render_tex[1].width = ren->scene_fbo.width;
 	ren->scene_fbo.render_tex[1].height = ren->scene_fbo.height;
-	ren->scene_fbo.render_tex[1].internal_format = GL_RG32F;
+	ren->scene_fbo.render_tex[1].internal_format = GL_RGBA32F;
 
 	ren->lighting_fbo.width = res.x;
 	ren->lighting_fbo.height = res.y;
