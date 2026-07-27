@@ -1,5 +1,10 @@
 #version 460 core
 
+const uint TEX_MODE_LIT = 0;
+const uint TEX_MODE_UNLIT = 1;
+const uint TEX_MODE_DIST = 2;
+const uint TEX_MODE_GRAD = 3;
+
 layout(location = 2) in vec2 tex_coord;
 
 layout(binding = 0) uniform sampler2D tex;
@@ -9,15 +14,14 @@ layout(location = 11) uniform uint ray_count;
 layout(location = 12) uniform uint max_steps;
 layout(location = 13) uniform vec2 res;
 layout(location = 14) uniform bool use_noise;
-layout(location = 15) uniform bool show_dist;
 layout(location = 16) uniform float constant;
 layout(location = 17) uniform float linear;
 layout(location = 18) uniform float quadratic;
 layout(location = 19) uniform float time;
-layout(location = 20) uniform bool show_shadow;
 layout(location = 21) uniform float exposure;
 layout(location = 22) uniform float ambient;
 layout(location = 23) uniform float gamma;
+layout(location = 24) uniform uint tex_mode;
 
 layout(location = 0) out vec4 frag_color;
 
@@ -77,6 +81,8 @@ vec4 ray_march() {
                                         total_dist += dist;
                                         sample_uv += ray_direction_uv * vec2(dist * aspect, dist);
                                 }
+                        } else {
+                                continue;
                         }
                 }
 
@@ -92,30 +98,38 @@ vec4 ray_march() {
                                 float falloff = 1.0 / (constant + (linear * total_dist) + (quadratic * (total_dist * total_dist)));
                                 radiance += col * falloff * sample_dist.a;
                                 break;
-                        } else if (sample_dist.g < epsilon) {
-                                // break;
                         }
-
                         sample_uv += ray_direction_uv * vec2(sample_dist.r * aspect, sample_dist.r);
                         total_dist += sample_dist.r;
                 }
         }
 
-        return ((radiance / float(ray_count))) + start_color * ambient;
-        // return ((radiance / float(ray_count)));
+        return (radiance / float(ray_count)) + start_color * ambient;
 }
 
 void main() {
-        if (show_dist) {
-                vec4 dist = texture(distance_tex, tex_coord);
-                frag_color = vec4(dist.rgb, 1.0);
-        } else if (show_shadow) {
-                float dist = texture(distance_tex, tex_coord).g;
-                frag_color = vec4(vec3(dist), 1.0);
-        } else {
-                vec4 color = ray_march();
+        vec4 color;
+
+        switch (tex_mode) {
+                case TEX_MODE_LIT:
+                color = ray_march();
                 vec3 mapped = vec3(1.0) - exp(-color.rgb * exposure);
                 mapped = pow(mapped, vec3(1.0 / gamma));
-                frag_color = vec4(mapped, 1.0);
+                color = vec4(mapped, 1.0);
+                break;
+                case TEX_MODE_UNLIT:
+                color = texture(tex, tex_coord);
+                color = vec4(color.rgb, 1.0);
+                break;
+                case TEX_MODE_DIST:
+                color = texture(distance_tex, tex_coord);
+                color = vec4(vec3(color.r), 1.0);
+                break;
+                case TEX_MODE_GRAD:
+                color = texture(distance_tex, tex_coord);
+                color = vec4(0.0, color.g * 10.0, color.b * 10.0, 1.0);
+                break;
         }
+
+        frag_color = color;
 }

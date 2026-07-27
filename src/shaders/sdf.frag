@@ -11,6 +11,7 @@
 const uint CIRCLE = 1;
 const uint BOX = 2;
 const uint TRIANGLE = 3;
+const uint PARABOLA = 4;
 
 const uint UNION = 1;
 const uint SUBTRACTION = 2;
@@ -19,14 +20,19 @@ const uint SMOOTH_UNION = 4;
 const uint SMOOTH_SUBTRACTION = 5;
 const uint SMOOTH_INTERSECTION = 6;
 
+const uint LIGHT = 1 << 0;
+const uint ANNULAR = 1 << 1;
+
 // struct sdf_shape {
 // 	struct transform transform;
 // 	vec4s dim;
 // 	vec4s color;
 // 	float blend;
+// 	float brightness;
 // 	enum shape_type shape_type;
 // 	enum edit_type edit_type;
 // 	bool is_light;
+// 	bool is_annular;
 // };
 
 struct entity {
@@ -37,12 +43,12 @@ struct entity {
         float brightness;
         uint shape_type;
         uint edit_type;
-        bool is_light;
+        uint flags;
 };
 
 struct sdf {
         vec3 min_dist;
-        float min_light_dist;
+        vec3 avg_color;
         uint closest_index;
 };
 
@@ -141,30 +147,72 @@ vec3 sdgCircle(in vec2 p, in float r)
         return vec3(d - r, p / d);
 }
 
-float opUnion(float a, float b) {
+vec3 sdgSegment(in vec2 p, in vec2 a, in vec2 b, in float r)
+{
+        vec2 ba = b - a, pa = p - a;
+        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+        vec2 q = pa - h * ba;
+        float d = length(q);
+        return vec3(d - r, q / d);
+}
+
+vec3 sdgParabola(in vec2 pos, in float k)
+{
+        float s = sign(pos.x);
+        pos.x = abs(pos.x);
+
+        float ik = 1.0 / k;
+        float p = ik * (pos.y - 0.5 * ik) / 3.0;
+        float q = 0.25 * ik * ik * pos.x;
+        float h = q * q - p * p * p;
+        float r = sqrt(abs(h));
+
+        float x = (h > 0.0) ?
+                pow(q + r, 1.0 / 3.0) - pow(abs(q - r), 1.0 / 3.0) * sign(r - q) :
+                2.0 * cos(atan(r, q) / 3.0) * sqrt(p);
+
+        float z = sign(pos.x - x);
+        vec2 w = pos - vec2(x, k * x * x);
+        float l = length(w);
+        w.x *= s;
+        return z * vec3(l, w / l);
+}
+
+vec3 opUnion(vec3 a, vec3 b) {
         return min(a, b);
 }
 
-float opSubtraction(float a, float b) {
+vec3 opSubtraction(vec3 a, vec3 b) {
         return max(-a, b);
 }
 
-float opIntersection(float a, float b) {
+vec3 opIntersection(vec3 a, vec3 b) {
         return max(a, b);
 }
 
-float opSmoothUnion(float a, float b, float k)
+// float opSmoothUnion(float a, float b, float k)
+// {
+//         k *= 4.0;
+//         float h = max(k - abs(a - b), 0.0);
+//         return min(a, b) - h * h * 0.25 / k;
+// }
+
+vec3 opSmoothUnion(in vec3 a, in vec3 b, in float k)
 {
         k *= 4.0;
-        float h = max(k - abs(a - b), 0.0);
-        return min(a, b) - h * h * 0.25 / k;
+        float h = max(k - abs(a.x - b.x), 0.0);
+        float m = 0.25 * h * h / k;
+        float n = 0.50 * h / k;
+        return vec3(min(a.x, b.x) - m,
+                mix(a.yz, b.yz, (a.x < b.x) ? n : 1.0 - n));
 }
-float opSmoothSubtraction(float a, float b, float k)
+
+vec3 opSmoothSubtraction(vec3 a, vec3 b, float k)
 {
         return -opSmoothUnion(a, -b, k);
 }
 
-float opSmoothIntersection(float a, float b, float k)
+vec3 opSmoothIntersection(vec3 a, vec3 b, float k)
 {
         return -opSmoothUnion(-a, -b, k);
 }
@@ -176,91 +224,116 @@ float sineWave(vec2 p, float freq, float thick, float phase) {
         return line;
 }
 
+vec3 sdgCircleAnnular(in vec2 p, in float r, in float ar)
+{
+        vec3 dis_gra = sdgCircle(p, r);
+        return vec3(abs(dis_gra.x - ar) - r, sign(dis_gra.x) * dis_gra.yz);
+}
+
+vec3 sdgBoxAnnular(in vec2 p, in vec2 b, in float ar)
+{
+        vec3 dis_gra = sdgBox(p, b);
+        return vec3(abs(dis_gra.x - ar) - b.y / b.x, sign(dis_gra.x) * dis_gra.yz);
+}
+
+vec3 sdgTriangleAnnular(in vec2 p, in vec2 ps[3], in float ar)
+{
+        vec3 dis_gra = sdgTriangle(p, ps);
+        return vec3(abs(dis_gra.x - ar) - ps[1].x, sign(dis_gra.x) * dis_gra.yz);
+}
+
 vec3 get_distance(uint i, vec2 pos) {
+        bool annular = (entities[i].flags & ANNULAR) != 0;
+        vec4 dim = entities[i].dim;
+
         switch (entities[i].shape_type) {
                 case CIRCLE:
-                return sdgCircle(pos, entities[i].dim.x);
+                return annular ? sdgCircleAnnular(pos, dim.x, dim.y) : sdgCircle(pos, dim.x);
                 case BOX:
-                return sdgBox(pos, entities[i].dim.yx);
+                return annular ? sdgBoxAnnular(pos, vec2(dim.x, dim.y), dim.z) : sdgBox(pos, vec2(dim.x, dim.y));
                 case TRIANGLE:
-                float r = entities[i].dim.x;
-                vec2 ps[3];
+                float r = dim.x;
                 float k = sqrt(3.0);
+                vec2 ps[3];
                 ps[0] = vec2(0.0, r / k);
                 ps[1] = vec2(r, -r);
                 ps[2] = vec2(-r, -r);
-
-                return sdgTriangle(pos, ps);
+                return annular ? sdgTriangleAnnular(pos, ps, dim.y) : sdgTriangle(pos, ps);
+                case PARABOLA:
+                return sdgParabola(pos, dim.x);
         }
 }
 
-float get_min(uint i, float m, float d) {
+vec3 get_min(uint i, vec3 m, vec3 d) {
+        float blend = entities[i].blend;
+
         switch (entities[i].edit_type) {
                 case UNION:
                 return opUnion(d, m);
                 case SUBTRACTION:
                 return opSubtraction(m, d);
                 case INTERSECTION:
-                return opIntersection(d, m);
+                return opIntersection(m, d);
                 case SMOOTH_UNION:
-                return opSmoothUnion(d, m, entities[i].blend);
+                return opSmoothUnion(d, m, blend);
                 case SMOOTH_SUBTRACTION:
-                return opSmoothSubtraction(m, d, entities[i].blend);
+                return opSmoothSubtraction(m, d, blend);
                 case SMOOTH_INTERSECTION:
-                return opSmoothIntersection(m, d, entities[i].blend);
+                return opSmoothIntersection(m, d, blend);
         }
 }
 
 sdf map() {
         sdf sdf_info;
         sdf_info.min_dist.x = 20.0;
-        sdf_info.min_light_dist = 20.0;
         sdf_info.closest_index = 0;
+        sdf_info.avg_color = entities[0].color.rgb;
+        uint num_hits = 0;
 
         vec2 frag_pos = (2.0 * gl_FragCoord.xy - resolution) / resolution.y;
-
-        frag_pos *= cam_size;
-        frag_pos += cam_pos;
+        frag_pos = fma(frag_pos, vec2(cam_size), cam_pos);
 
         for (int i = 0; i < num_entities; i++) {
-                vec2 pos = frag_pos - entities[i].position;
+                vec2 p = frag_pos - entities[i].position;
+                vec3 d = get_distance(i, p);
+                float temp = d.x;
+                d.x = get_min(i, sdf_info.min_dist, d).x;
 
-                vec3 d = get_distance(i, pos);
-                float m = get_min(i, sdf_info.min_dist.x, d.x);
+                if (temp < 0.01 && d.x < 0.01) {
+                        vec3 col1 = entities[sdf_info.closest_index].color.rgb;
+                        vec3 col2 = entities[i].color.rgb;
 
-                if (m < sdf_info.min_dist.x) {
-                        sdf_info.min_dist.x = m;
-                        sdf_info.min_dist.y = d.y;
-                        sdf_info.min_dist.z = d.z;
+                        float r = abs(temp - d.x);
+                        float t = r / cam_size;
+
+                        sdf_info.avg_color = mix(col1, col2, r);
+                }
+
+                if (d.x < sdf_info.min_dist.x) {
+                        sdf_info.min_dist = d;
                         sdf_info.closest_index = i;
-                        if (entities[i].is_light) {
-                                sdf_info.min_light_dist = m;
-                        }
                 }
         }
 
         return sdf_info;
 }
+
 void main()
 {
         sdf sdf_info = map();
 
         vec4 col = vec4(0.1, 0.2, 0.7, 0.0);
-        vec4 dist = vec4(0.0);
+        vec4 dist = vec4(sdf_info.min_dist.rgb, 0.0) * (1.0 / (cam_size * 2.0));
         uint i = sdf_info.closest_index;
 
         if (sdf_info.min_dist.x < 0.01) {
                 col = vec4(entities[i].color.rgb * (1.0 - sdf_info.min_dist.x), 1.0) * entities[i].brightness;
-                // col = vec4(entities[i].color.rgb, 1.0) * entities[i].brightness;
-
-                if (entities[i].is_light)
+                // col = vec4(sdf_info.avg_color, 1.0);
+                bool isLight = (entities[i].flags & LIGHT) != 0;
+                if (isLight)
                         dist.a = 1.0;
         }
 
-        // distance_field = vec2(sdf_info.min_light_dist, sdf_info.min_dist) * (1.0 / (cam_size * 2.0));
-        dist.r = sdf_info.min_dist.x * (1.0 / (cam_size * 2.0));
-        dist.g = sdf_info.min_dist.y * (1.0 / (cam_size * 2.0));
-        dist.b = sdf_info.min_dist.z * (1.0 / (cam_size * 2.0));
         distance_field = dist;
         frag_color = col;
 }

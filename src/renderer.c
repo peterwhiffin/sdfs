@@ -81,7 +81,7 @@ void create_framebuffer(struct framebuffer *fbo)
 void create_scene_framebuffer(struct framebuffer *fbo)
 {
 	GLuint rb;
-	GLenum attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT0 + 1};
+	GLenum attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT0 + 1 };
 
 	glCreateFramebuffers(1, &fbo->id);
 	glCreateRenderbuffers(1, &rb);
@@ -170,8 +170,10 @@ GLuint load_shader(const char *vert_file, const char *frag_file)
 	glAttachShader(prog, frag_shader);
 
 	glLinkProgram(prog);
-
 	check_program_link(prog);
+
+	glDeleteShader(vert_shader);
+	glDeleteShader(frag_shader);
 
 	free((void *)vert_buff);
 	free((void *)frag_buff);
@@ -183,6 +185,7 @@ void load_all_shaders(struct renderer *ren)
 	ren->sdf_shader = load_shader("fullscreen.vert", "sdf.frag");
 	ren->lighting_shader = load_shader("fullscreen.vert", "lighting.frag");
 	ren->fullscreen_shader = load_shader("fullscreen.vert", "fullscreen.frag");
+	ren->post_shader = load_shader("fullscreen.vert", "crt.frag");
 }
 
 void reload_shaders(struct renderer *ren)
@@ -190,8 +193,8 @@ void reload_shaders(struct renderer *ren)
 	glDeleteProgram(ren->sdf_shader);
 	glDeleteProgram(ren->fullscreen_shader);
 	glDeleteProgram(ren->lighting_shader);
+	glDeleteProgram(ren->post_shader);
 	load_all_shaders(ren);
-
 
 	glUseProgram(ren->sdf_shader);
 	float res[2] = { ren->scene_fbo.width, ren->scene_fbo.height };
@@ -207,40 +210,44 @@ void draw(struct renderer *ren, struct window *win, struct scene *scene, struct 
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct sdf_shape) * scene->num_sdfs, scene->sdfs);
 
 	glViewport(0, 0, ren->scene_fbo.width, ren->scene_fbo.height);
-	glBindFramebuffer(GL_FRAMEBUFFER, ren->scene_fbo.id);
-	glClearNamedFramebufferfv(ren->scene_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
 
+	glBindFramebuffer(GL_FRAMEBUFFER, ren->scene_fbo.id);
 	glUseProgram(ren->sdf_shader);
 	glUniform1fv(5, 1, &ren->time);
 	glUniform2fv(8, 1, &cam->transform.pos.x);
 	glUniform1i(9, scene->num_sdfs);
 	glUniform1fv(10, 1, &cam->size);
-	glBindVertexArray(ren->quad_mesh.vao);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, ren->lighting_fbo.id);
-	glClearNamedFramebufferfv(ren->lighting_fbo.id, GL_COLOR, 0, &ren->clear_color[0]);
 	glUseProgram(ren->lighting_shader);
+	glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
+	glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
 	glUniform1ui(11, ren->ray_count);
 	glUniform1ui(12, ren->max_steps);
 	glUniform1ui(14, ren->use_noise);
-	glUniform1ui(15, ren->show_dist);
-	glUniform1fv(16,1, &ren->constant);
-	glUniform1fv(17,1, &ren->linear);
-	glUniform1fv(18,1, &ren->quadratic);
-	glUniform1fv(19,1, &ren->time);
-	glUniform1ui(20, ren->show_shadow_blocker);
-	glUniform1fv(21,1, &ren->exposure);
-	glUniform1fv(22,1, &ren->ambient);
-	glUniform1fv(23,1, &ren->gamma);
-	glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
-	glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
-	glBindVertexArray(ren->quad_mesh.vao);
+	glUniform1fv(16, 1, &ren->constant);
+	glUniform1fv(17, 1, &ren->linear);
+	glUniform1fv(18, 1, &ren->quadratic);
+	glUniform1fv(19, 1, &ren->time);
+	glUniform1fv(21, 1, &ren->exposure);
+	glUniform1fv(22, 1, &ren->ambient);
+	glUniform1fv(23, 1, &ren->gamma);
+	glUniform1ui(24, ren->tex_mode);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
+
+	glViewport(0, 0, ren->post_fbo.width, ren->post_fbo.height);
+	glBindFramebuffer(GL_FRAMEBUFFER, ren->post_fbo.id);
+	glUseProgram(ren->post_shader);
+	vec2s res = (vec2s){ ren->post_fbo.width, ren->post_fbo.height };
+	glUniform2fv(5, 1, &res.x);
+	glUniform2fv(6, 1, &ren->pixel_size.x);
+	glUniform2fv(7, 1, &ren->real_res.x);
+	glBindTextureUnit(0, ren->lighting_fbo.render_tex[0].id);
 	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, (void *)0);
 
 	glViewport(0, 0, win->width, win->height);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glClearNamedFramebufferfv(0, GL_COLOR, 0, &ren->clear_color[0]);
 }
 
 void create_sdf_buffer(struct renderer *ren, struct scene *scene)
@@ -251,30 +258,105 @@ void create_sdf_buffer(struct renderer *ren, struct scene *scene)
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ren->sdf_buff);
 }
 
+void gl_debug_callback(GLenum src, GLenum type, GLuint id, GLenum severity, GLsizei length, GLchar const *msg,
+		       void const *user_param)
+{
+	char src_str[128];
+	switch (src) {
+	case GL_DEBUG_SOURCE_API:
+		snprintf(src_str, 128, "%s", "API::");
+		break;
+	case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+		snprintf(src_str, 128, "%s", "WINDOW_SYSTEM::");
+		break;
+	case GL_DEBUG_SOURCE_SHADER_COMPILER:
+		snprintf(src_str, 128, "%s", "SHADER_COMPILER::");
+		break;
+	case GL_DEBUG_SOURCE_THIRD_PARTY:
+		snprintf(src_str, 128, "%s", "THIRD_PARTY::");
+		break;
+	case GL_DEBUG_SOURCE_APPLICATION:
+		snprintf(src_str, 128, "%s", "APPLICATION::");
+		break;
+	case GL_DEBUG_SOURCE_OTHER:
+		snprintf(src_str, 128, "%s", "OTHER::");
+		break;
+	}
+
+	char type_str[128];
+	switch (type) {
+	case GL_DEBUG_TYPE_ERROR:
+		snprintf(type_str, 128, "%s", "ERROR::");
+		break;
+	case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+		snprintf(type_str, 128, "%s", "DEPRECATED_BEHAVIOR::");
+		break;
+	case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+		snprintf(type_str, 128, "%s", "UNDEFINED_BEHAVIOR::");
+		break;
+	case GL_DEBUG_TYPE_PORTABILITY:
+		snprintf(type_str, 128, "%s", "PORTABILITY::");
+		break;
+	case GL_DEBUG_TYPE_PERFORMANCE:
+		snprintf(type_str, 128, "%s", "PERFORMANCE::");
+		break;
+	case GL_DEBUG_TYPE_MARKER:
+		snprintf(type_str, 128, "%s", "MARKER::");
+		break;
+	case GL_DEBUG_TYPE_OTHER:
+		snprintf(type_str, 128, "%s", "OTHER::");
+		break;
+	}
+
+	char severity_str[128];
+	switch (severity) {
+	case GL_DEBUG_SEVERITY_NOTIFICATION:
+		return;
+		// snprintf(severity_str, 128, "%s", "NOTIFICATION::");
+		break;
+	case GL_DEBUG_SEVERITY_LOW:
+		snprintf(severity_str, 128, "%s", "LOW::");
+		break;
+	case GL_DEBUG_SEVERITY_MEDIUM:
+		snprintf(severity_str, 128, "%s", "MEDIUM::");
+		break;
+	case GL_DEBUG_SEVERITY_HIGH:
+		snprintf(severity_str, 128, "%s", "HIGH::");
+		break;
+	}
+
+	printf("%s%s%s%s\n", src_str, type_str, severity_str, msg);
+}
+
 void init_renderer(struct renderer *ren, struct window *win, struct scene *scene)
 {
 	gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
+	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+	glDebugMessageCallback(gl_debug_callback, NULL);
 	glDisable(GL_DEPTH_TEST);
-	// vec2s res = { 1920.0f ,1080.0f };
-	vec2s res = { 640.0f , 480.0f };
-	// vec2s res = { 256.0f , 256.0f };
+	// vec2s res = { 1920.0f, 1080.0f };
+	// vec2s res = { 64.0f * 3, 64.0f * 3 };
+	vec2s res = { 512.0f * 3.0f, 512.0f * 3.0f };
+	// vec2s res = { 128.0f * 3, 128.0f * 3 };
 
 	ren->clear_color[0] = 0.0f;
 	ren->clear_color[1] = 0.0f;
 	ren->clear_color[2] = 0.0f;
 	ren->clear_color[3] = 0.0f;
-	ren->clear_depth = 1.0f;
+	ren->clear_depth = 0.0f;
 	ren->ambient = 0.1f;
-	ren->gamma= 0.51f;
+	ren->gamma = 0.51f;
 	ren->constant = 0.873f;
 	ren->linear = 0.014f;
 	ren->exposure = 2.48f;
 	ren->quadratic = 0.02f;
 	ren->ray_count = 128;
 	ren->max_steps = 32;
-	ren->show_dist = false;
+	ren->pixel_size.x = 3.0f;
+	ren->pixel_size.y = 1.0f;
 	ren->use_noise = true;
-	ren->show_shadow_blocker = false;
+	ren->tex_mode = TEX_MODE_LIT;
 
 	ren->scene_fbo.width = res.x;
 	ren->scene_fbo.height = res.y;
@@ -293,8 +375,17 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	ren->lighting_fbo.render_tex[0].height = ren->lighting_fbo.height;
 	ren->lighting_fbo.render_tex[0].internal_format = GL_RGBA32F;
 
+	ren->post_fbo.width = res.x;
+	ren->post_fbo.height = res.y;
+	ren->post_fbo.aspect = ren->post_fbo.width / ren->post_fbo.height;
+	ren->post_fbo.render_tex[0].width = ren->post_fbo.width;
+	ren->post_fbo.render_tex[0].height = ren->post_fbo.height;
+
+	ren->post_fbo.render_tex[0].internal_format = GL_RGBA32F;
+
 	create_scene_framebuffer(&ren->scene_fbo);
 	create_framebuffer(&ren->lighting_fbo);
+	create_framebuffer(&ren->post_fbo);
 	create_fullscreen_vao(ren);
 	create_sdf_buffer(ren, scene);
 	load_all_shaders(ren);
@@ -302,4 +393,11 @@ void init_renderer(struct renderer *ren, struct window *win, struct scene *scene
 	glUniform2fv(7, 1, &res.x);
 	glUseProgram(ren->lighting_shader);
 	glUniform2fv(13, 1, &res.x);
+
+	// glBindTextureUnit(0, ren->scene_fbo.render_tex[0].id);
+	// glBindTextureUnit(1, ren->scene_fbo.render_tex[1].id);
+
+	glUseProgram(ren->post_shader);
+	// glBindTextureUnit(0, ren->lighting_fbo.render_tex[0].id);
+	glBindVertexArray(ren->quad_mesh.vao);
 }

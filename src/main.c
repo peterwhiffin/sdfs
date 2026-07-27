@@ -1,3 +1,4 @@
+#include "SDL3/SDL_error.h"
 #include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_timer.h"
 #include "cglm/types-struct.h"
@@ -16,7 +17,10 @@
 
 void init_window(struct window *win)
 {
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
+		goto err;
+
+	win->sdl_keys = SDL_GetKeyboardState(NULL);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
@@ -24,11 +28,22 @@ void init_window(struct window *win)
 
 	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
 	win->sdl_win = SDL_CreateWindow("SDF", win->width, win->height, flags);
-	win->gl_ctx = SDL_GL_CreateContext(win->sdl_win);
+	if (!win->sdl_win)
+		goto err;
 
-	SDL_GL_MakeCurrent(win->sdl_win, win->gl_ctx);
-	SDL_GL_SetSwapInterval(1);
-	win->sdl_keys = SDL_GetKeyboardState(NULL);
+	win->gl_ctx = SDL_GL_CreateContext(win->sdl_win);
+	if (!win->gl_ctx)
+		goto err;
+
+	if (!SDL_GL_MakeCurrent(win->sdl_win, win->gl_ctx))
+		goto err;
+
+	if (!SDL_GL_SetSwapInterval(1))
+		goto err;
+
+	return;
+err:
+	printf("ERROR::SDL::%s\n", SDL_GetError());
 }
 
 void window_resized(struct window *win)

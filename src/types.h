@@ -6,16 +6,28 @@
 #include <stdint.h>
 #include "imgui/dcimgui.h"
 
-enum shape_type { CIRCLE = 1, BOX, TRIANGLE, NUM_SHAPES };
+enum shape_type { CIRCLE = 1, BOX, TRIANGLE, PARABOLA, NUM_SHAPES };
 
 enum edit_type {
 	UNION = 1,
-	SUBTRACTION = 2,
-	INTERSECTION = 3,
-	SMOOTH_UNION = 4,
-	SMOOTH_SUBTRACTION = 5,
-	SMOOTH_INTERSECTION = 6,
-	NUM_EDITS
+	SUBTRACTION,
+	INTERSECTION,
+	SMOOTH_UNION,
+	SMOOTH_SUBTRACTION,
+	SMOOTH_INTERSECTION,
+	NUM_EDITS,
+};
+
+enum sdf_flags {
+	LIGHT = 1 << 0,
+	ANNULAR = 1 << 1,
+};
+
+enum tex_mode {
+	TEX_MODE_LIT = 0,
+	TEX_MODE_UNLIT,
+	TEX_MODE_DIST,
+	TEX_MODE_GRAD,
 };
 
 struct transform {
@@ -30,7 +42,7 @@ struct sdf_shape {
 	float brightness;
 	enum shape_type shape_type;
 	enum edit_type edit_type;
-	bool is_light;
+	uint32_t flags;
 };
 
 struct camera {
@@ -93,7 +105,9 @@ struct framebuffer {
 struct renderer {
 	struct framebuffer scene_fbo;
 	struct framebuffer lighting_fbo;
+	struct framebuffer post_fbo;
 	struct mesh quad_mesh;
+	vec2s real_res;
 	float clear_color[4];
 	float clear_depth;
 	float time;
@@ -104,15 +118,16 @@ struct renderer {
 	float linear;
 	float quadratic;
 	float exposure;
+	vec2s pixel_size;
 	bool use_noise;
-	bool show_dist;
-	bool show_shadow_blocker;
 	GLuint ray_count;
 	GLuint max_steps;
 	GLuint sdf_shader;
+	GLuint post_shader;
 	GLuint lighting_shader;
 	GLuint fullscreen_shader;
 	GLuint sdf_buff;
+	enum tex_mode tex_mode;
 };
 
 struct editor {
